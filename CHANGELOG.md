@@ -22,14 +22,11 @@ image that uses OpenRC.
   ttyS0.
 - Native guest self-test now verifies OpenRC PID 1 and the default runlevel.
 - Hosted GUI offscreen smoke test and reproducible desktop screenshot.
-- Cross-platform host application discovery for Windows Start Menu entries,
-  macOS `.app` bundles and Linux `.desktop` files.
-- Host Applications desktop window with double-click launching.
-- Terminal commands `hostapps`, `run` and `open` for explicit host integration;
-  launches use direct process APIs rather than `shell=True`.
-- Cross-platform host-side test handling: Windows paths retain backslashes,
-  native Linux syscall bindings can be imported by hosted Windows/macOS tests,
-  and POSIX-only native pipeline tests are skipped where `fork()` is absent.
+- Internal PythonOS app registry and terminal commands `apps`, `open` and
+  `run` for opening managed desktop windows from inside PythonOS.
+- Cross-platform host-side test handling: native Linux syscall bindings can
+  be imported by hosted Windows/macOS tests, and POSIX-only native pipeline
+  tests are skipped where `fork()` is absent.
 
 ### Changed
 

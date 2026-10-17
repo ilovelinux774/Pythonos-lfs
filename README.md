@@ -63,7 +63,7 @@ The first hosted desktop opens as a normal application window with:
 - PythonOS terminal
 - private virtual filesystem and file browser
 - settings and about applications
-- Host Applications browser for apps installed by Windows, Linux or macOS
+- internal app launcher and terminal commands for opening PythonOS windows
 - fullscreen mode
 - the same Python application model that will be used by native mode
 
@@ -79,21 +79,18 @@ help
 sysinfo
 ls
 py 6 * 7
-hostapps
-run notepad                 # Windows example
-open "C:\\Users\\YourName\\Documents"
+apps
+open files
+run settings
 ```
 
-The **Host Applications** window discovers launchable applications from the
-host's normal application registry: Start Menu entries on Windows, `.app`
-bundles in `/Applications` on macOS, and `.desktop` files on Linux. Double-
-click an entry to launch it. The `run` terminal command launches a discovered
-application by name or a host command without going through a shell; `open`
-uses the host's default application for a path.
+The launcher and the `apps`, `open` and `run` terminal commands all target
+PythonOS applications. Each application opens as a managed window inside the
+PythonOS desktop and gets a taskbar button; it does not depend on an external
+host application registry.
 
 Hosted files are kept safely in `~/.pythonos/files` by default. PythonOS does
-not treat the host's entire filesystem as its own root; host application
-launching is an explicit integration surface rather than a filesystem escape.
+not treat the host's entire filesystem as its own root.
 
 ![PythonOS hosted desktop](docs/screenshots/hosted-desktop.png)
 

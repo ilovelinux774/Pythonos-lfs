@@ -26,6 +26,13 @@ class TerminalEngine:
     def __init__(self, platform: HostPlatform, opener: Callable[[str], None] | None = None):
         self.platform = platform
         self.opener = opener
+        self.applications = {
+            "welcome": "Welcome",
+            "terminal": "Terminal",
+            "files": "Files",
+            "settings": "Settings",
+            "about": "About PythonOS",
+        }
         self.commands = {
             "apps": self._apps,
             "cd": self._cd,
@@ -33,11 +40,10 @@ class TerminalEngine:
             "date": self._date,
             "echo": self._echo,
             "help": self._help,
-            "hostapps": self._hostapps,
             "ls": self._ls,
-            "open": self._open,
+            "open": self._open_app,
             "pwd": self._pwd,
-            "run": self._run,
+            "run": self._open_app,
             "py": self._py,
             "python": self._py,
             "sysinfo": self._sysinfo,
@@ -86,44 +92,32 @@ class TerminalEngine:
                 "  cd [PATH]            change the virtual directory\n"
                 "  date                 show the host date and time\n"
                 "  echo TEXT            print text\n"
-                "  hostapps             list applications installed on the host OS\n"
                 "  ls [PATH]            list PythonOS files\n"
-                "  open PATH            open a host path with its default application\n"
+                "  open APP             open a PythonOS application window\n"
                 "  pwd                  show the virtual working directory\n"
                 "  py CODE              evaluate Python code\n"
-                "  run APP [ARGS]       launch a host application or command\n"
+                "  run APP              alias for open APP\n"
                 "  sysinfo              show platform information\n"
                 "  clear                clear the terminal\n"
                 "  exit                 close the terminal window\n\n"
                 "Files live in ~/.pythonos/files in hosted mode.")
 
     def _apps(self, _args: list[str]) -> str:
-        return "Terminal\nFiles\nSettings\nAbout"
+        return "\n".join(f"{name:<10} {title}" for name, title in self.applications.items())
 
-    def _hostapps(self, _args: list[str]) -> str:
-        apps = self.platform.list_host_apps()
-        if not apps:
-            return "No host applications found."
-        return "\n".join(f"{app.name}  [{app.kind}]" for app in apps)
-
-    def _run(self, args: list[str]) -> str:
+    def _open_app(self, args: list[str]) -> str:
         if not args:
-            raise ValueError("usage: run APP [ARGS]")
+            raise ValueError("usage: open APP")
         requested = args[0].casefold()
-        matches = [app for app in self.platform.list_host_apps()
-                   if app.name.casefold() == requested]
-        if matches:
-            app = matches[0]
-            self.platform.launch_host_app(app)
-            return f"Launched {app.name}."
-        self.platform.launch_command(args)
-        return f"Launched {' '.join(args)}."
-
-    def _open(self, args: list[str]) -> str:
-        if not args:
-            raise ValueError("usage: open PATH")
-        self.platform.open_host_path(" ".join(args))
-        return f"Opening {' '.join(args)}."
+        aliases = {"home": "welcome", "info": "about"}
+        name = aliases.get(requested, requested)
+        if name not in self.applications:
+            choices = ", ".join(self.applications)
+            raise ValueError(f"unknown PythonOS app '{args[0]}' (choose: {choices})")
+        if self.opener is None:
+            return f"Open {self.applications[name]} from the PythonOS launcher."
+        self.opener(name)
+        return f"Opening {self.applications[name]}."
 
     def _cd(self, args: list[str]) -> str:
         target = args[0] if args else "~"

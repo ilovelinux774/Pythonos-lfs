@@ -97,6 +97,27 @@ app.quit()
         )
         self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
 
+    def test_terminal_opens_pythonos_app(self):
+        self._require_qt()
+        code = """
+from pythonos.desktop.platform import HostPlatform
+from pythonos.desktop.terminal import TerminalEngine
+opened = []
+engine = TerminalEngine(HostPlatform(), opened.append)
+output, should_close = engine.execute(\"open files\")
+assert opened == [\"files\"]
+assert output == \"Opening Files.\"
+assert not should_close
+assert \"terminal\" in engine.execute(\"apps\")[0]
+"""
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=20, env=env,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -85,7 +85,6 @@ class WelcomeWidget(QWidget):
             ("▣  Terminal", "Run PythonOS commands and Python code", "terminal"),
             ("▤  Files", "Explore your private PythonOS files", "files"),
             ("⚙  Settings", "Configure the desktop", "settings"),
-            ("▦  Host Applications", "Launch applications installed by the host OS", "hostapps"),
             ("ⓘ  About", "Learn how the modular system works", "about"),
         ]
         for index, (title, description, name) in enumerate(entries):
@@ -145,67 +144,6 @@ class FilesWidget(QWidget):
         path = self.platform.paths.files / "welcome.py"
         path.write_text("# A file in the hosted PythonOS filesystem\nprint('Hello from PythonOS')\n", encoding="utf-8")
         self.refresh()
-
-
-class HostAppsWidget(QWidget):
-    """Browse and launch applications registered by the host operating system."""
-
-    def __init__(self, platform: HostPlatform):
-        super().__init__()
-        self.platform = platform
-        layout = QVBoxLayout(self)
-        title = QLabel("Host Applications")
-        title.setObjectName("hero")
-        layout.addWidget(title)
-        description = QLabel(
-            "These applications belong to the host OS. PythonOS discovers them\n"
-            "without copying or reimplementing them, then launches them directly."
-        )
-        description.setObjectName("muted")
-        layout.addWidget(description)
-        self.list = QListWidget()
-        self.list.setToolTip("Double-click an application to launch it")
-        self.list.itemDoubleClicked.connect(self.launch_selected)
-        layout.addWidget(self.list)
-        controls = QHBoxLayout()
-        refresh = QPushButton("Refresh")
-        refresh.clicked.connect(self.refresh)
-        controls.addWidget(refresh)
-        controls.addStretch()
-        self.status = QLabel("Double-click an application to launch it.")
-        self.status.setObjectName("muted")
-        controls.addWidget(self.status)
-        layout.addLayout(controls)
-        self.refresh()
-
-    def refresh(self):
-        self.list.clear()
-        try:
-            apps = self.platform.list_host_apps()
-        except OSError as exc:
-            self.status.setText(str(exc))
-            return
-        if not apps:
-            self.list.addItem("No host applications found.")
-            self.status.setText("No applications discovered.")
-            return
-        for app in apps:
-            item = QListWidgetItem(f"{app.name}   ·   {app.kind}")
-            item.setData(Qt.ItemDataRole.UserRole, app)
-            item.setToolTip(app.target)
-            self.list.addItem(item)
-        self.status.setText(f"{len(apps)} host applications discovered.")
-
-    def launch_selected(self, item: QListWidgetItem):
-        app = item.data(Qt.ItemDataRole.UserRole)
-        if app is None:
-            return
-        try:
-            self.platform.launch_host_app(app)
-        except (OSError, ValueError) as exc:
-            self.status.setText(f"Could not launch {app.name}: {exc}")
-        else:
-            self.status.setText(f"Launched {app.name}.")
 
 
 class SettingsWidget(QWidget):
@@ -351,7 +289,6 @@ class DesktopWindow(QMainWindow):
         menu.addAction("Open Welcome", lambda: self.open_app("welcome"))
         menu.addSeparator()
         for name, title in (("terminal", "Terminal"), ("files", "Files"),
-                            ("hostapps", "Host Applications"),
                             ("settings", "Settings"), ("about", "About")):
             menu.addAction(title, lambda n=name: self.open_app(n))
         menu.addSeparator()
@@ -420,9 +357,6 @@ class DesktopWindow(QMainWindow):
         elif name == "files":
             widget = FilesWidget(self.platform)
             title = "Files"
-        elif name == "hostapps":
-            widget = HostAppsWidget(self.platform)
-            title = "Host Applications"
         elif name == "settings":
             widget = SettingsWidget(self)
             title = "Settings"

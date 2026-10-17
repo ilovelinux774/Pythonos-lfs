@@ -51,21 +51,10 @@ Hosted mode keeps its data in `~/.pythonos/` by default:
 
 The first version deliberately keeps the virtual filesystem inside that
 folder. An application cannot mistake the user's real `/`, `C:\\` or home
-directory for the PythonOS filesystem. Host integration is explicit: the
-platform service discovers registered host applications and exposes separate
-launch/open operations rather than making the host filesystem the PythonOS
-root.
-
-The hosted desktop currently supports:
-
-* Windows Start Menu `.lnk`, `.url` and `.exe` entries
-* macOS `.app` bundles in `/Applications` and the user's Applications folder
-* Linux `.desktop` entries from the standard per-user and system directories
-
-The **Host Applications** window and terminal commands `hostapps`, `run` and
-`open` use this service. Launches pass argument arrays directly to the host
-process where possible; PythonOS does not use `shell=True` for application
-launching.
+directory for the PythonOS filesystem. The desktop app registry is owned by
+PythonOS: launcher entries and terminal commands resolve to PythonOS widgets,
+which are opened as managed windows inside the desktop and represented on the
+taskbar.
 
 ## Native mode — Alpine + OpenRC
 

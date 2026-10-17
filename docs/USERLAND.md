@@ -30,17 +30,17 @@ history file is `~/.pysh_history`.
 
 The PySide6 hosted desktop has a real single-buffer terminal with an inline
 prompt, cursor editing, blinking caret, history, scrollback and selectable
-output. It also exposes explicit host integration commands:
+output. Its app commands target the PythonOS desktop itself:
 
 | Command | Description |
 |---|---|
-| `hostapps` | list applications discovered from the host OS |
-| `run APP [ARGS]` | launch a discovered host application or direct host command |
-| `open PATH` | open a host path with the host OS default application |
+| `apps` | list applications provided by the PythonOS desktop |
+| `open APP` | open a PythonOS application window |
+| `run APP` | alias for `open APP` |
 
-The hosted backend discovers Windows Start Menu entries, macOS `.app` bundles
-and Linux `.desktop` files. Launches use direct process APIs rather than a
-shell. The virtual PythonOS filesystem remains under `~/.pythonos/files`.
+The available desktop apps are Welcome, Terminal, Files, Settings and About.
+They open as managed PythonOS windows with taskbar buttons. The virtual
+PythonOS filesystem remains under `~/.pythonos/files`.
 
 ## Navigation & session
 

@@ -8,13 +8,10 @@ services and devices inside the Alpine image.
 
 from __future__ import annotations
 
-import configparser
 import datetime as _datetime
 import os
 import platform as _platform
-import shlex
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,16 +36,6 @@ class HostPaths:
         for path in (paths.root, paths.files, paths.apps, paths.config, paths.cache):
             path.mkdir(parents=True, exist_ok=True)
         return paths
-
-
-@dataclass(frozen=True)
-class HostApp:
-    """A launchable application discovered from the host OS."""
-
-    name: str
-    target: str
-    kind: str
-    command: tuple[str, ...] = ()
 
 
 class HostPlatform:
@@ -134,115 +121,3 @@ class HostPlatform:
             "PythonOS home": str(self.paths.root),
             "Storage": f"{used} / {total}",
         }
-
-    # --- host applications -------------------------------------------------
-
-    def list_host_apps(self, limit: int = 120) -> list[HostApp]:
-        """Discover applications registered by the current operating system."""
-        if self.system == "Windows":
-            apps = self._windows_apps()
-        elif self.system == "Darwin":
-            apps = self._macos_apps()
-        else:
-            apps = self._linux_apps()
-        unique: dict[tuple[str, str], HostApp] = {}
-        for app in apps:
-            unique.setdefault((app.name.casefold(), app.target), app)
-        return sorted(unique.values(), key=lambda app: app.name.casefold())[:limit]
-
-    def launch_host_app(self, app: HostApp) -> None:
-        """Launch one application discovered by ``list_host_apps``."""
-        if app.command:
-            self.launch_command(list(app.command))
-            return
-        self.open_host_path(app.target)
-
-    def launch_command(self, args: list[str]) -> None:
-        """Launch a host command without invoking a shell."""
-        if not args:
-            raise ValueError("a command is required")
-        kwargs = {"cwd": str(self.cwd), "start_new_session": True}
-        if self.system == "Windows":
-            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        try:
-            subprocess.Popen(args, **kwargs)
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(f"host command not found: {args[0]}") from exc
-
-    def open_host_path(self, target: str | os.PathLike[str]) -> None:
-        """Open a host path with the operating system's default application."""
-        path = str(target)
-        if self.system == "Windows":
-            os.startfile(path)  # type: ignore[attr-defined]
-        elif self.system == "Darwin":
-            subprocess.Popen(["open", path], start_new_session=True)
-        else:
-            self.launch_command(["xdg-open", path])
-
-    def _windows_apps(self) -> list[HostApp]:
-        roots = [
-            Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
-            Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
-        ]
-        apps: list[HostApp] = []
-        for root in roots:
-            if not root.is_dir():
-                continue
-            for path in root.rglob("*"):
-                if path.suffix.lower() in (".lnk", ".url", ".exe"):
-                    apps.append(HostApp(path.stem, str(path), path.suffix.lower()[1:]))
-        return apps
-
-    def _macos_apps(self) -> list[HostApp]:
-        roots = [Path("/Applications"), Path.home() / "Applications"]
-        apps: list[HostApp] = []
-        for root in roots:
-            if not root.is_dir():
-                continue
-            for path in root.glob("*.app"):
-                apps.append(HostApp(path.stem, str(path), "app"))
-        return apps
-
-    def _linux_apps(self) -> list[HostApp]:
-        roots = [
-            Path.home() / ".local/share/applications",
-            Path("/usr/local/share/applications"),
-            Path("/usr/share/applications"),
-        ]
-        apps: list[HostApp] = []
-        for root in roots:
-            if not root.is_dir():
-                continue
-            for path in root.glob("*.desktop"):
-                app = self._read_desktop_file(path)
-                if app is not None:
-                    apps.append(app)
-        return apps
-
-    @staticmethod
-    def _read_desktop_file(path: Path) -> HostApp | None:
-        parser = configparser.ConfigParser(interpolation=None, strict=False)
-        try:
-            parser.read(path, encoding="utf-8")
-            entry = parser["Desktop Entry"]
-        except (OSError, KeyError, configparser.Error):
-            return None
-        if entry.get("Type", "Application") != "Application":
-            return None
-        if entry.getboolean("NoDisplay", fallback=False) or entry.getboolean("Hidden", fallback=False):
-            return None
-        raw_exec = entry.get("Exec", "").strip()
-        if not raw_exec:
-            return None
-        try:
-            command = tuple(part for part in shlex.split(raw_exec)
-                            if not part.startswith("%"))
-        except ValueError:
-            return None
-        if not command:
-            return None
-        executable = command[0]
-        if not (os.path.isabs(executable) and os.path.exists(executable)):
-            if shutil.which(executable) is None:
-                return None
-        return HostApp(entry.get("Name", path.stem), str(path), "desktop", command)
