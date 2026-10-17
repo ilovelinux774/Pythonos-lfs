@@ -27,6 +27,9 @@ image that uses OpenRC.
 - Host Applications desktop window with double-click launching.
 - Terminal commands `hostapps`, `run` and `open` for explicit host integration;
   launches use direct process APIs rather than `shell=True`.
+- Cross-platform host-side test handling: Windows paths retain backslashes,
+  native Linux syscall bindings can be imported by hosted Windows/macOS tests,
+  and POSIX-only native pipeline tests are skipped where `fork()` is absent.
 
 ### Changed
 

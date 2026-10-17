@@ -10,7 +10,13 @@ import ctypes.util
 import os
 import platform
 
-_libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+try:
+    # These bindings are used by the Alpine/OpenRC native runtime. The
+    # hosted shell tests can still import the native userland on Windows and
+    # macOS, where there is no Linux libc exposing mount(2) and reboot(2).
+    _libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+except (AttributeError, OSError):
+    _libc = None
 
 # mount(2) flags
 MS_RDONLY = 1
@@ -31,9 +37,12 @@ RB_HALT_SYSTEM = 0xCdef0123
 
 PR_SET_CHILD_SUBREAPER = 36
 
-_libc.mount.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
-                        ctypes.c_ulong, ctypes.c_char_p]
-_libc.mount.restype = ctypes.c_int
+if _libc is not None and hasattr(_libc, "mount"):
+    _libc.mount.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+                            ctypes.c_ulong, ctypes.c_char_p]
+    _libc.mount.restype = ctypes.c_int
+else:
+    _libc = None
 
 
 def errno_name():
@@ -43,6 +52,8 @@ def errno_name():
 
 def mount(source, target, fstype="", flags=0, data=None):
     """mount(2). Returns 0 on success, raises OSError on failure."""
+    if _libc is None:
+        raise OSError(38, "mount(2) is unavailable on this host", target)
     os.makedirs(target, exist_ok=True)
     src = source.encode() if source else None
     tgt = target.encode()
@@ -56,6 +67,8 @@ def mount(source, target, fstype="", flags=0, data=None):
 
 def reboot(cmd=RB_POWER_OFF):
     """Synchronise disks, then reboot(2). Does not return on success."""
+    if _libc is None:
+        raise OSError(38, "reboot(2) is unavailable on this host")
     try:
         os.sync()
     except Exception:
@@ -65,11 +78,13 @@ def reboot(cmd=RB_POWER_OFF):
 
 
 def sethostname(name):
+    if _libc is None:
+        raise OSError(38, "sethostname(2) is unavailable on this host")
     _libc.sethostname(name.encode(), len(name.encode()))
 
 
 def setsid():
-    return os.setsid()
+    return os.setsid() if hasattr(os, "setsid") else 0
 
 
 def getpid():

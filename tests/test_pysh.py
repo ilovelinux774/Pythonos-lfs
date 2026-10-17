@@ -30,7 +30,7 @@ from pysh.shell import Shell, expand_word, parse, tokenize  # noqa: E402
 
 def run(command, cwd=None):
     env = dict(os.environ)
-    env["PYTHONPATH"] = f"{PKG}:{LIB}"
+    env["PYTHONPATH"] = os.pathsep.join((PKG, LIB))
     env["TERM"] = "dumb"
     return subprocess.run(
         [sys.executable, "-m", "pysh.shell", "-c", command],
@@ -108,6 +108,7 @@ class ShellExecutionTests(unittest.TestCase):
     def test_echo(self):
         self.assertEqual(run("echo hello").stdout, "hello\n")
 
+    @unittest.skipUnless(os.name == "posix", "native pysh pipelines require POSIX fork")
     def test_pipeline(self):
         proc = run("echo one | wc -l")
         self.assertEqual(proc.returncode, 0)
@@ -120,7 +121,8 @@ class ShellExecutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "x.txt")
             run(f"echo payload > {path}")
-            self.assertEqual(open(path).read(), "payload\n")
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "payload\n")
 
     def test_python_builtin(self):
         self.assertEqual(run("py 'print(21 * 2)'").stdout.strip(), "42")
@@ -162,9 +164,10 @@ class ShellObjectTests(unittest.TestCase):
     def test_cd_updates_pwd(self):
         shell = Shell(interactive=False)
         start = os.getcwd()
+        target = tempfile.gettempdir()
         try:
-            shell.execute("cd /tmp")
-            self.assertEqual(os.getcwd(), "/tmp")
+            shell.execute(f"cd {target}")
+            self.assertEqual(os.path.normcase(os.getcwd()), os.path.normcase(target))
         finally:
             os.chdir(start)
 

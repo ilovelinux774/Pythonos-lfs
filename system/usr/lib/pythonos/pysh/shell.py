@@ -147,6 +147,14 @@ def expand_word(raw, env, do_glob=True):
             continue
 
         if quote is None and ch == "\\" and i + 1 < n:
+            # Native pysh is POSIX-flavoured, but its host-side tests also
+            # run on Windows. There a backslash is normally a path
+            # separator, not an escape character; preserving it lets paths
+            # such as C:\\Users\\Name\\Temp\\*.txt glob correctly.
+            if os.name == "nt":
+                out.append(ch)
+                i += 1
+                continue
             out.append(raw[i + 1])
             i += 2
             continue
