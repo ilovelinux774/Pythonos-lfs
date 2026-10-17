@@ -1,0 +1,61 @@
+name: build-and-boot
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ISO and boot-test it
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the tree
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip
+
+      - name: Host-side unit tests
+        run: make unittest
+
+      - name: Stage root filesystem (Alpine minirootfs + Python)
+        run: make rootfs
+
+      - name: Build initramfs and ISO
+        run: make iso
+
+      - name: Boot the image in QEMU and run the in-guest self-test
+        run: make test
+
+      - name: Show the self-test report
+        if: always()
+        run: |
+          if [ -f release/boot-selftest.log ]; then
+            grep -aE "PASS|FAIL|SELFTEST|Traceback|panic" release/boot-selftest.log | tail -n 40
+          fi
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-selftest-log
+          path: release/boot-selftest.log
+          if-no-files-found: warn
+
+      - name: Upload ISO
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pythonos-0.1-iso
+          path: release/pythonos-0.1.iso
+          retention-days: 30
+
+      - name: Upload screenshots from this boot? (demo mode)
+        if: false   # demo capture needs a framebuffer; kept manual via `make shots`
+        run: true

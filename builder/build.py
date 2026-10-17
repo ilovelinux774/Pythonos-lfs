@@ -148,6 +148,9 @@ def build_initramfs():
 
 
 def build_iso(initramfs):
+    if not os.path.exists(KERNEL_SRC):
+        sys.exit(f"error: kernel missing at {KERNEL_SRC}\n"
+                 f"       run builder/prepare_rootfs.sh first (it downloads it)")
     step("Assembling ISO tree")
     if os.path.isdir(ISO_STAGE):
         shutil.rmtree(ISO_STAGE)
@@ -212,6 +215,28 @@ def build_iso(initramfs):
     return iso_path
 
 
+def hand_back_ownership():
+    """Builds run under sudo; make the artefacts owned by the caller."""
+    sudo_uid = os.environ.get("SUDO_UID")
+    sudo_gid = os.environ.get("SUDO_GID")
+    if not sudo_uid:
+        return
+    try:
+        uid, gid = int(sudo_uid), int(sudo_gid)
+    except (TypeError, ValueError):
+        return
+    for name in os.listdir(RELEASE):
+        path = os.path.join(RELEASE, name)
+        try:
+            os.chown(path, uid, gid)
+        except OSError:
+            pass
+    try:
+        os.chown(RELEASE, uid, gid)
+    except OSError:
+        pass
+
+
 def human(path):
     size = os.path.getsize(path)
     for unit in ("B", "KB", "MB", "GB"):
@@ -248,6 +273,8 @@ def main():
     iso = None
     if not args.no_iso and initramfs:
         iso = build_iso(initramfs)
+
+    hand_back_ownership()
 
     elapsed = time.time() - started
     print("\nBuild complete in %.1fs" % elapsed)

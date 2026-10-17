@@ -7,8 +7,17 @@ BASE=$(cd "$(dirname "$0")/.." && pwd)
 LOG="$BASE/release/boot-selftest.log"
 TIMEOUT=${1:-240}
 
-mkdir -p "$BASE/release"
+mkdir -p "$BASE/release" 2>/dev/null
+if ! : > "$LOG" 2>/dev/null; then
+    LOG="/tmp/pythonos-boot-selftest.log"
+    echo "note: release/ is not writable, logging to $LOG"
+fi
 rm -f "$LOG"
+
+if [ ! -f "$BASE/.cache-dl/vmlinuz-lts" ]; then
+    echo "error: kernel missing — run 'make rootfs' (builder/prepare_rootfs.sh) first" >&2
+    exit 1
+fi
 
 echo "==> booting PythonOS in QEMU (timeout ${TIMEOUT}s)"
 timeout "$TIMEOUT" qemu-system-x86_64 \
