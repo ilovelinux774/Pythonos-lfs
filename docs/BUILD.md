@@ -1,126 +1,156 @@
 # Building PythonOS
 
-## Requirements
+PythonOS has a hosted desktop and a native Alpine image. The hosted desktop
+is the fast development path; the native image proves the Alpine/OpenRC
+system path.
 
-* x86_64 Linux host (Debian/Ubuntu and Alpine both work)
-* `gcc`, `curl`, `cpio`, `gzip`, `xorriso`, `qemu-system-x86_64`
-* `sudo` — used once, to chroot into the staged root filesystem
-
-```sh
-sudo apt install qemu-system-x86 cpio xorriso curl
-```
-
-## One-shot build
+## Hosted desktop
 
 ```sh
-make all        # rootfs + overlay + initramfs + ISO
+python -m venv .venv
+. .venv/bin/activate                 # Windows: .venv\\Scripts\\activate
+python -m pip install -r requirements.txt
+pythonos-desktop
 ```
 
-Output:
+The requirements file installs PySide6-Essentials and the repository in
+editable mode, which provides the `pythonos-desktop` command. To run without
+installing the console script:
 
+```sh
+python -m pythonos.desktop.main
 ```
-release/initramfs-lts       15 MB   the PythonOS filesystem
-release/pythonos-0.1.iso    27 MB   bootable hybrid ISO
+
+Headless/CI smoke test:
+
+```sh
+QT_QPA_PLATFORM=offscreen python -m pythonos.desktop.main --smoke-test
+make desktop-shot
 ```
 
-## Step by step
+## Native Alpine image
 
-### 1. Stage the root filesystem (once)
+### Requirements
+
+* x86_64 Linux host
+* `curl`, `cpio`, `gzip`, `xorriso`, `isolinux`, `syslinux-common`
+* `qemu-system-x86`
+* `sudo` for the one-time rootfs chroot
+
+Debian/Ubuntu:
+
+```sh
+sudo apt install qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common
+```
+
+### 1. Stage Alpine, Python and OpenRC
 
 ```sh
 sudo builder/prepare_rootfs.sh
 ```
 
-Downloads Alpine's minirootfs and kernel into `.cache-dl/` (git-ignored),
-unpacks the rootfs to `/tmp/pyrootfs`, and installs Python 3.12 with
-`apk` inside a chroot. This is the only package-manager step in the
-entire build; it exists purely to obtain an interpreter and the kernel.
+This downloads Alpine's x86_64 minirootfs and LTS kernel into `.cache-dl/`,
+unpacks the rootfs to `/tmp/pyrootfs`, and installs `python3 openrc` with
+Alpine's `apk`. Alpine supplies the low-level C plumbing and service manager;
+PythonOS supplies the framework and userland.
 
-### 2. Overlay PythonOS and pack
+The normal image intentionally stays small and uses hosted mode for graphics.
+To stage the optional native Xorg + PySide6 profile, which adds hundreds of
+megabytes of Qt libraries, use:
+
+```sh
+make rootfs-gui    # stages it in .build/pyrootfs
+make iso-gui       # builds using that larger rootfs
+```
+
+The builder enables `pythonos-gui` automatically when `startx` is present.
+The `PYTHONOS_ROOTFS` environment variable can also point both scripts at a
+larger disk-backed staging directory.
+
+### 2. Build the initramfs and ISO
 
 ```sh
 sudo python3 builder/build.py
 ```
 
-* copies `system/` over `/tmp/pyrootfs`
-* installs the `PYTHONHASHSEED` interpreter wrapper and static `/dev` nodes
-* packs the tree: `find . | cpio -o -H newc | gzip -9`
-* builds the ISO with `xorriso` (isolinux + isohybrid MBR)
+The builder overlays `system/`, installs the early-boot Python interpreter
+wrapper, creates OpenRC runlevel links, packs the initramfs and assembles a
+hybrid ISO with isolinux.
 
 Useful flags:
 
 ```sh
-sudo python3 builder/build.py --no-iso          # initramfs only, fast loop
-sudo python3 builder/build.py --no-initramfs    # reuse existing initramfs
+sudo python3 builder/build.py --no-iso       # initramfs only
+sudo python3 builder/build.py --no-initramfs # reuse existing initramfs
 ```
 
-### 3. Boot it
+Builds run in about eight seconds after the rootfs is staged.
+
+### 3. Boot and test
+
+```sh
+make test
+```
+
+The harness boots with:
+
+```text
+console=ttyS0 rdinit=/init pythonos.selftest=1
+```
+
+`/init` is a compatibility shell wrapper that execs Alpine's `/sbin/init`.
+BusyBox init starts OpenRC; OpenRC starts the `pythonos` service; the service
+runs the self-test and powers off. The test expects:
+
+```text
+SELFTEST PASSED — 22 passed, 0 failed
+```
+
+The log is written to `release/boot-selftest.log`.
+
+### 4. Run the native image interactively
 
 ```sh
 make run
-# or, without make:
-qemu-system-x86_64 -m 512 -cdrom release/pythonos-0.1.iso
 ```
 
-Serial console instead of a window:
+The normal boot prints the PythonOS report, then OpenRC's getty presents a
+login prompt on the serial console and tty1. The root login shell is `pysh`.
+
+To boot the ISO in a graphical QEMU window:
 
 ```sh
-qemu-system-x86_64 -m 512 -nographic \
-  -kernel .cache-dl/vmlinuz-lts \
-  -initrd release/initramfs-lts \
-  -append "console=ttyS0 rdinit=/init"
+make run-iso
 ```
 
-### 4. Test it
+### 5. Capture proof screens
 
 ```sh
-make test       # ~30 s: boots the initramfs, expects SELFTEST PASSED
+make shots
 ```
 
-The log is kept at `release/boot-selftest.log`. A failing check shows the
-assertion, so you can fix and rebuild in under a minute.
+The QEMU monitor captures the native console tour. The hosted desktop image
+can be regenerated independently with `make desktop-shot`.
 
-### 5. Screenshots
-
-```sh
-make shots      # boots with pythonos.demo=1, types into the shell, saves PNGs
-```
-
-`builder/demo_shots.py` talks to QEMU's monitor socket: it watches the
-serial log for demo markers, issues `screendump`, and converts the PPM to
-PNG with a pure-stdlib converter (`builder/ppm2png.py`).
-
-## Host-side tests
-
-No root, no QEMU:
-
-```sh
-make unittest
-```
-
-Runs `tests/test_pysh.py` — tokenizer, expansion, pipelines, redirects and
-builtins — against the source tree in `system/`.
-
-## Writing to a USB stick
+## USB image
 
 ```sh
 sudo dd if=release/pythonos-0.1.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-The ISO is isohybrid: it boots as a CD image or as a raw disk image.
-Booting from USB works on BIOS and (via the isolinux image) on most UEFI
-setups with CSM; native UEFI boot is on the roadmap.
+Double-check `/dev/sdX` before running this command.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `Fatal Python error: _Py_HashRandomization_Init` | interpreter wrapper missing | rebuild: `sudo python3 builder/build.py` |
-| `Kernel panic … Attempted to kill init` | `/init` crashed | boot with `rdinit=/bin/sh`, check `/init`, `python3 -m pythonos.init_main` |
-| Blank screen, no serial output | wrong console args | add `console=ttyS0` and run QEMU with `-nographic` |
-| `prepare_rootfs.sh needs root` | chroot requires root | re-run with `sudo` |
+| `pythonos-desktop: command not found` | hosted package not installed | run `python -m pip install -r requirements.txt` |
+| Qt platform plugin error | no host display | use a graphical session or `QT_QPA_PLATFORM=offscreen ... --smoke-test` |
+| `openrc: not found` in the image | old rootfs staged before OpenRC support | run `sudo builder/prepare_rootfs.sh` again |
+| `SELFTEST FAILED` | native service or filesystem issue | inspect `release/boot-selftest.log`; boot with `rdinit=/bin/sh` |
+| kernel missing | cache was removed | run `make rootfs` |
 
-To debug interactively:
+Debug shell:
 
 ```sh
 qemu-system-x86_64 -m 512 -nographic \

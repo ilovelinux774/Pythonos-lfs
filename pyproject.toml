@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pythonos"
+version = "0.2.0"
+description = "A modular Python desktop environment and Alpine-based operating system"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "PythonOS contributors" }]
+dependencies = ["PySide6-Essentials>=6.7,<7"]
+
+[project.scripts]
+pythonos-desktop = "pythonos.desktop.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pythonos*"]
+
+[tool.setuptools.package-data]
+pythonos = ["**/*.json"]

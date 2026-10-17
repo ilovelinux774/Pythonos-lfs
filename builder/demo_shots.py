@@ -102,7 +102,12 @@ def main():
             if pending:
                 name, _marker = pending[0]
                 if name == "shell":
-                    time.sleep(3.5)  # login banner + first prompt
+                    time.sleep(3.5)  # OpenRC getty login banner
+                    print("==> logging into pysh as root")
+                    send_text(sock, "root\n")
+                    time.sleep(1.0)
+                    send_text(sock, "\n")  # passwordless root in the live image
+                    time.sleep(2.0)
                     print("==> typing into pysh: help")
                     send_text(sock, "help\n")
                     time.sleep(2.5)

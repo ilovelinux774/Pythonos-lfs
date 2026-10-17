@@ -21,10 +21,19 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common
 
+      - name: Install hosted desktop dependencies
+        run: python3 -m pip install --no-cache-dir -r requirements.txt
+
+      - name: Hosted desktop smoke test
+        run: QT_QPA_PLATFORM=offscreen python3 -m pythonos.desktop.main --smoke-test
+
+      - name: Capture hosted desktop proof image
+        run: make desktop-shot
+
       - name: Host-side unit tests
         run: make unittest
 
-      - name: Stage root filesystem (Alpine minirootfs + Python)
+      - name: Stage root filesystem (Alpine minirootfs + Python + OpenRC)
         run: make rootfs
 
       - name: Build initramfs and ISO
@@ -54,6 +63,14 @@ jobs:
         with:
           name: pythonos-0.1-iso
           path: release/pythonos-0.1.iso
+          retention-days: 30
+
+      - name: Upload hosted desktop proof
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-desktop-proof
+          path: docs/screenshots/hosted-desktop.png
           retention-days: 30
 
       - name: Upload screenshots from this boot? (demo mode)

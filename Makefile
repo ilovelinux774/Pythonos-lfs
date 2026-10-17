@@ -1,11 +1,11 @@
-# PythonOS — build and test
+# PythonOS — build, test and run
 #
-#   make all        rootfs + initramfs + ISO
-#   make test       boot in QEMU and assert the in-guest self-test
-#   make run        boot interactively
-#   make shots      capture the screenshots in docs/
-#   make unittest   host-side unit tests (no root, no QEMU)
-#   make clean      remove build outputs (keeps the downloaded cache)
+#   make all             Alpine rootfs + OpenRC + initramfs + ISO
+#   make rootfs-gui      optional native Xorg + PySide6 rootfs
+#   make desktop-install install hosted desktop dependencies
+#   make desktop         run the hosted PythonOS desktop
+#   make test            boot the native Alpine image in QEMU
+#   make unittest        host-side tests (no root, GUI optional)
 
 SHELL := /bin/bash
 PY := python3
@@ -13,18 +13,35 @@ KERNEL := .cache-dl/vmlinuz-lts
 INITRAMFS := release/initramfs-lts
 ISO := release/pythonos-0.1.iso
 
-.PHONY: all rootfs iso initramfs test run run-iso shots unittest clean distclean
+.PHONY: all rootfs rootfs-gui iso iso-gui initramfs test run run-iso run-serial shots \
+        desktop-install desktop desktop-shot unittest clean distclean
 
 all: iso
 
 rootfs:
 	sudo builder/prepare_rootfs.sh
 
+rootfs-gui:
+	mkdir -p .build
+	sudo PYTHONOS_NATIVE_GUI=1 PYTHONOS_ROOTFS=$(CURDIR)/.build/pyrootfs builder/prepare_rootfs.sh
+
 iso:
 	sudo $(PY) builder/build.py
 
+iso-gui:
+	sudo PYTHONOS_ROOTFS=$(CURDIR)/.build/pyrootfs $(PY) builder/build.py
+
 initramfs:
 	sudo $(PY) builder/build.py --no-iso
+
+desktop-install:
+	$(PY) -m pip install -r requirements.txt
+
+desktop:
+	$(PY) -m pythonos.desktop.main
+
+desktop-shot:
+	QT_QPA_PLATFORM=offscreen $(PY) builder/desktop_shot.py
 
 test:
 	@test -f $(INITRAMFS) || { echo "run 'make iso' first"; exit 1; }
@@ -53,7 +70,7 @@ unittest:
 	PYTHONPATH=system/usr/lib/pythonos:system/usr/lib $(PY) -m unittest discover -s tests -v
 
 clean:
-	rm -rf release INCLUDE /tmp/pythonos-iso /tmp/pyrootfs
+	rm -rf release /tmp/pythonos-iso /tmp/pyrootfs .build
 
 distclean: clean
 	rm -rf .cache-dl

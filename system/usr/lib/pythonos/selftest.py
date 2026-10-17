@@ -49,19 +49,21 @@ def expect_ok(command, contains=None):
 
 
 # --- boot ------------------------------------------------------------------
-@check("running as PID 1", guest_only=True)
-def _pid1():
-    if os.getpid() != 1:
-        raise AssertionError(f"pid is {os.getpid()}")
+@check("OpenRC is PID 1", guest_only=True)
+def _openrc_pid1():
+    """The native system deliberately leaves PID 1 to Alpine/OpenRC."""
+    with open("/proc/1/comm", "r", encoding="utf-8") as fh:
+        comm = fh.read().strip()
+    exe = os.path.basename(os.readlink("/proc/1/exe"))
+    if comm != "init" and exe != "busybox":
+        raise AssertionError(f"comm={comm!r}, exe={exe!r}")
 
 
-
-@check("PID 1 command line is Python", guest_only=True)
-def _pid1_python():
-    with open("/proc/1/cmdline", "rb") as fh:
-        cmdline = fh.read().replace(b"\x00", b" ").decode()
-    if "python" not in cmdline:
-        raise AssertionError(cmdline[:120])
+@check("OpenRC reached the default runlevel", guest_only=True)
+def _openrc_runlevel():
+    marker = "/run/openrc/softlevel"
+    if not os.path.exists(marker):
+        raise AssertionError(f"{marker} is missing")
 
 
 @check("core filesystems mounted", guest_only=True)

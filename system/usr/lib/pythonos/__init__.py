@@ -1,7 +1,7 @@
-"""PythonOS — a Linux distribution whose system speaks Python.
+"""PythonOS — an Alpine/OpenRC Linux system with a Python userland.
 
-Everything above the kernel — PID 1, the boot sequence, the shell and the
-userland tools — is implemented in this package.
+OpenRC owns native service management. The Python layer provides the
+framework, shell, desktop services and userland tools above it.
 """
 
 __version__ = "0.1.0"

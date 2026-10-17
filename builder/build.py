@@ -22,7 +22,7 @@ import sys
 import time
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ROOTFS = "/tmp/pyrootfs"
+ROOTFS = os.environ.get("PYTHONOS_ROOTFS", "/tmp/pyrootfs")
 CACHE = os.path.join(BASE, ".cache-dl")
 RELEASE = os.path.join(BASE, "release")
 ISO_STAGE = "/tmp/pythonos-iso"
@@ -56,6 +56,9 @@ def find_syslinux(name):
 
 EXECUTABLES = (
     "init",
+    "etc/init.d/pythonos",
+    "etc/init.d/pythonos-gui",
+    "usr/bin/pythonos-gui",
     "usr/bin/pysh",
     "usr/bin/pyfetch",
     "usr/bin/pytop",
@@ -69,6 +72,8 @@ ALWAYS_MKDIR = (
     "var", "var/lib", "var/lib/pythonos", "var/lib/pythonos/pkg",
     "usr/lib/pythonos/apps",
     "usr/share/pythonos/repo",
+    "etc/runlevels/sysinit", "etc/runlevels/boot", "etc/runlevels/default",
+    "etc/runlevels/shutdown",
 )
 
 
@@ -90,12 +95,47 @@ def copy_tree(src, dst):
     shutil.copytree(src, dst, dirs_exist_ok=True)
 
 
+def configure_openrc():
+    """Create Alpine/OpenRC runlevel links in the staged image.
+
+    The minirootfs intentionally has empty runlevels. Keeping this explicit
+    makes the image reproducible and avoids depending on the host's rc-update
+    command or on package post-install scripts running outside a real boot.
+    """
+    default_services = ["pythonos"]
+    if os.path.exists(os.path.join(ROOTFS, "usr/bin/startx")):
+        default_services.append("pythonos-gui")
+
+    runlevels = {
+        "sysinit": ("devfs", "procfs", "sysfs"),
+        "boot": ("hostname", "bootmisc", "localmount"),
+        "default": tuple(default_services),
+        "shutdown": ("killprocs", "mount-ro"),
+    }
+    for level, services in runlevels.items():
+        directory = os.path.join(ROOTFS, "etc/runlevels", level)
+        os.makedirs(directory, exist_ok=True)
+        for service in services:
+            link = os.path.join(directory, service)
+            if os.path.lexists(link):
+                os.remove(link)
+            target = f"/etc/init.d/{service}"
+            os.symlink(target, link)
+
+
 def overlay_rootfs():
     system = os.path.join(BASE, "system")
     for entry in sorted(os.listdir(system)):
         src = os.path.join(system, entry)
         dst = os.path.join(ROOTFS, entry)
         copy_tree(src, dst)
+
+    # The hosted desktop is the canonical graphical framework. Merge only its
+    # desktop package into the native PythonOS package; keep the native shell,
+    # boot helpers and tools from system/ alongside it.
+    hosted_desktop = os.path.join(BASE, "pythonos", "desktop")
+    native_desktop = os.path.join(ROOTFS, "usr/lib/pythonos/desktop")
+    copy_tree(hosted_desktop, native_desktop)
 
     for relative in EXECUTABLES:
         path = os.path.join(ROOTFS, relative)
@@ -105,6 +145,8 @@ def overlay_rootfs():
     for relative in ALWAYS_MKDIR:
         os.makedirs(os.path.join(ROOTFS, relative), exist_ok=True)
     os.chmod(os.path.join(ROOTFS, "tmp"), 0o1777)
+
+    configure_openrc()
 
     for link, target in (("bin", "usr/bin"), ("sbin", "usr/sbin")):
         path = os.path.join(ROOTFS, link)
@@ -158,7 +200,7 @@ def overlay_rootfs():
 
     # A tiny marker so pyfetch can tell it is running from the image.
     with open(os.path.join(ROOTFS, "etc/pythonos-release"), "w", encoding="utf-8") as fh:
-        fh.write("PythonOS 0.1 Constrictor\n")
+        fh.write("PythonOS 0.1 Constrictor · Alpine · OpenRC\n")
 
 
 def build_initramfs():

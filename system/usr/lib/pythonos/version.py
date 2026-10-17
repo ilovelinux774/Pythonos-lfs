@@ -4,7 +4,7 @@ from . import __codename__, __version__
 
 
 def banner_subtitle():
-    return f"version {__version__}  ·  codename \"{__codename__}\"  ·  a distro written in Python"
+    return f"version {__version__}  ·  codename \"{__codename__}\"  ·  Alpine/OpenRC with a Python userland"
 
 
 def short_version():

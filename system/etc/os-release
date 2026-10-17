@@ -1,5 +1,5 @@
 NAME="PythonOS"
-PRETTY_NAME="PythonOS 0.1 (Constrictor)"
+PRETTY_NAME="PythonOS 0.1 (Constrictor) — Alpine/OpenRC"
 ID=pythonos
 ID_LIKE=linux
 VERSION_ID="0.1"

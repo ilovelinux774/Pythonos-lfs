@@ -1,175 +1,160 @@
-# Architecture
+# PythonOS architecture
 
-PythonOS is one idea enforced strictly: the userspace is Python. This
-document explains what runs at each stage of boot, what is not Python and
-why, and how the pieces fit together.
+PythonOS is a modular Python desktop environment with a native Alpine Linux
+runtime. The same application and UI contracts are intended to work in both
+modes.
 
-## The boot chain
+## Two runtimes
 
-```
- firmware (SeaBIOS/UEFI)
-   │
-   ├─ ISO (isolinux, 27 MB)  or  USB stick (isohybrid)
-   │
- Linux kernel 6.6 LTS  (prebuilt, from Alpine netboot)
-   │  argv: console=tty0 console=ttyS0 quiet loglevel=3
-   │  rdinit=/init
-   │
- /init  ── shebang: #!/usr/bin/python3      ← Python becomes PID 1
-   │
- pythonos.init_main.main()
-   ├─ os.chdir("/"), umask, PATH/HOME/TERM defaults
-   ├─ signal handlers (TERM/INT → poweroff)
-   ├─ boot.splash()                      logo + version block
-   ├─ boot.BootSequence.run()
-   │    ├─ mount devtmpfs → /dev
-   │    ├─ mount proc      → /proc
-   │    ├─ mount sysfs     → /sys
-   │    ├─ mount devpts    → /dev/pts
-   │    ├─ mount tmpfs     → /run, /tmp
-   │    └─ sethostname("pythonos")
-   ├─ hardware summary (CPU model, RAM from /proc/meminfo)
-   ├─ spawn pysh on /dev/tty1 and /dev/ttyS0
-   │     fork → setsid → open(console) → TIOCSCTTY → dup2 → execve
-   └─ supervise()
-         waitpid(-1) forever
-           ├─ unknown pid → orphan, already reaped, continue
-           ├─ shell exit 0 → leave that console quiet
-           └─ shell crash  → respawn with capped backoff
+```text
+                         PythonOS framework
+                 ┌──────────────┴──────────────┐
+                 │                             │
+          hosted platform                 native platform
+                 │                             │
+      Qt on Linux/Windows/macOS       Alpine + OpenRC + Linux
+                 │                             │
+             PythonOS desktop             PythonOS desktop
 ```
 
-Everything in that tree after the kernel is Python. The kernel is the only
-native code involved in booting.
+### Hosted platform
 
-## Filesystem layout
+`pythonos-desktop` runs as an ordinary application. PySide6-Essentials
+provides the portable native window and graphics layer. Qt selects the host's
+X11/Wayland, Win32 or Cocoa backend. Desktop logic, application windows,
+launcher, terminal and settings remain Python.
 
-The image is a single initramfs (cpio.gz, ~15 MB) unpacked into a tmpfs
-root by the kernel. Nothing is written to disk: PythonOS 0.1 is a live
-system.
+Hosted mode is designed to make development possible on one computer. It
+does not require a VM, a second machine, an ISO or a reboot.
 
-```
-/init                      PID 1 script
-/etc                       os-release, hostname, hosts, passwd, motd
-/usr/bin/python3           wrapper → /usr/bin/python3.12 with PYTHONHASHSEED
-/usr/bin/pysh              shell launcher
-/usr/bin/{pyfetch,pytop,pyedit,pkg}
-/usr/lib/pythonos/         the OS itself (this is where the code runs from)
-/usr/share/pythonos/repo/  on-disk package repository
-/var/lib/pythonos/pkg/     installed-package database (installed.json)
-/root                       HOME; pysh history is written here
-```
+### Native platform
 
-`/proc`, `/sys`, `/dev`, `/run` and `/tmp` are mounted by PID 1 at boot.
+The native image uses Alpine's kernel-facing base and OpenRC:
 
-## What is Python, and what is not
-
-| Component | Language | Why |
-|---|---|---|
-| init / PID 1 | Python | the point of the project |
-| shell, all builtins | Python | `` |
-| pyfetch, pytop, pyedit, pkg | Python | `` |
-| the 3 repo packages | Python | `` |
-| Linux kernel | C | we do not recompile kernels yet (roadmap) |
-| `/usr/bin/python3.12` | C | CPython interpreter |
-| busybox | C | Alpine's `sh` + core apps; present but unused by PythonOS |
-
-The honest summary: **we stand on a kernel and an interpreter, and build
-everything a usable system needs on top**. The roadmap's last item is
-replacing the borrowed kernel with an in-tree build; until then the
-kernel provenance is documented in `builder/prepare_rootfs.sh`.
-
-## pysh internals
-
-`pysh/shell.py` is a small, conventional implementation:
-
-1. **Tokenize** (`tokenize`) — splits on whitespace while tracking single
-   and double quotes and backslash escapes, keeps `|`, `;`, `&&`, `||`,
-   `>`, `>>`, `2>`, `2>&1`, `<` as operator tokens.
-2. **Alias expansion** (`_expand_aliases`) — rewrites the first word of
-   each simple command, capped at 25 expansions to survive `alias ls='ls -l'`.
-3. **Parse** (`parse`) — groups tokens into jobs (`Segment` objects) with
-   their redirect targets.
-4. **Expand** (`expand_word`) — quotes, `~`, `$VAR` / `${VAR}` / `$?` /
-   `$$`, then globbing via `glob.glob` for unquoted `* ? [`.
-5. **Execute** (`run_pipeline`) — single segment runs a builtin in-process
-   (with fd save/restore around redirects) or forks for external binaries;
-   multi-segment pipelines fork every stage and wire `os.pipe()` between
-   them, then `waitpid` each.
-
-Builtins live in `pysh/builtins.py`, registered by decorator into one
-`COMMANDS` dict that is also `help`'s data source. Each builtin is a plain
-function taking `(shell, args)` and returning an exit status.
-
-## Why PYTHONHASHSEED=0
-
-When the kernel starts `/init` from an initramfs it can happen before the
-CRNG has been seeded. CPython's startup then calls `getrandom()` and
-**aborts** (`Fatal Python error: _Py_HashRandomization_Init`), which as PID 1
-means a kernel panic. `builder/build.py` therefore installs a three-line
-`/usr/bin/python3` wrapper:
-
-```sh
-#!/bin/sh
-PYTHONHASHSEED=${PYTHONHASHSEED:-0}
-export PYTHONHASHSEED
-exec /usr/bin/python3.12 "$@"
+```text
+Linux kernel
+  → /init compatibility wrapper
+  → BusyBox init (PID 1)
+  → OpenRC sysinit / boot / default
+  → /etc/init.d/pythonos
+  → pysh gettys on tty1 and ttyS0
 ```
 
-Deterministic hashing has no downside for a live system with no untrusted
-input, and it makes boot work on any VM. Once entropy exists, nothing else
-in the OS depends on it.
+`system/etc/init.d/pythonos` runs `openrc_main.py`. With
+`pythonos.selftest=1`, it runs the guest self-test and powers off. In normal
+mode it prints the system report and exits; Alpine getty then gives the user
+a `pysh` login shell.
 
-## Package manager
+OpenRC deliberately owns PID 1 service management. Python is the framework,
+service layer and userland above it. Reusing Alpine avoids spending the
+project on a replacement init system.
 
-`pkg` operates on directories:
+## Layers
 
+### Native C and kernel layer
+
+* Linux kernel and drivers
+* musl C library
+* BusyBox init, getty and low-level utilities
+* OpenRC service manager
+* Qt's native graphics implementation in hosted mode
+
+### Python framework layer
+
+* platform service contracts
+* desktop window and panel model
+* app lifecycle and manifests
+* configuration and permissions
+* terminal command model
+* package/application APIs
+
+### Python user-facing layer
+
+* desktop shell
+* launcher
+* terminal
+* files application
+* settings
+* system information/about screen
+* future native window manager and services
+
+## Repository mapping
+
+```text
+pythonos/
+└── desktop/
+    ├── main.py          desktop window, panel, launcher and apps
+    ├── platform.py      private hosted paths and platform facts
+    └── terminal.py      portable PythonOS terminal
+
+system/
+├── init                 OpenRC compatibility wrapper
+├── etc/init.d/pythonos OpenRC service
+└── usr/lib/pythonos/    native shell, tools and OpenRC entry point
+
+builder/
+├── prepare_rootfs.sh    Alpine + Python + OpenRC
+├── build.py             overlay + OpenRC runlevels + initramfs + ISO
+└── test_boot.sh         QEMU guest test
 ```
-/usr/share/pythonos/repo/<name>/
-├── app.json     {"name", "version", "description", "entry"}
-└── main.py      the program
+
+The native package currently contains the proven command-line userland from
+the first prototype. The hosted package is the first graphical desktop
+milestone. Native graphical mode will use the same app contracts rather than
+becoming a separate codebase.
+
+## Platform services
+
+Applications must use a platform object instead of assuming Linux:
+
+```python
+class Platform:
+    def open_file(self, path): ...
+    def get_clipboard(self): ...
+    def list_processes(self): ...
+    def launch_application(self, app): ...
 ```
 
-`pkg install NAME` copies the directory to `/usr/lib/pythonos/apps/NAME`,
-writes a launcher into `/usr/bin/<entry>` and records it in
-`/var/lib/pythonos/pkg/installed.json`. No network, no signing yet —
-the repository is in the image and is itself part of the source tree.
+Hosted mode stores data in `~/.pythonos` and uses Qt/host APIs. Native mode
+will map the same calls to Linux filesystems, `/proc`, devices and OpenRC
+services. A phone backend can later implement touch, rotation, battery and
+mobile navigation without rewriting applications.
 
-## Build pipeline
+## Hosted filesystem
 
-```
-builder/prepare_rootfs.sh   (sudo, once)
-  curl alpine-minirootfs.tar.gz → /tmp/pyrootfs
-  chroot apk add python3
-        │
-builder/build.py            (sudo, every build)
-  copy system/ over /tmp/pyrootfs
-  install python3 wrapper + static /dev nodes
-  cpio | gzip → release/initramfs-lts
-  isolinux + kernel + initramfs → release/pythonos-0.1.iso
-        │
-builder/test_boot.sh
-  qemu -kernel -initrd pythonos.selftest=1 → expect "SELFTEST PASSED"
-        │
-builder/demo_shots.py
-  qemu + monitor socket → screendump → PNG
+Hosted mode defaults to a private virtual home:
+
+```text
+~/.pythonos/
+├── files/
+├── apps/
+├── config/
+└── cache/
 ```
 
-Builds are incremental and take ~8 seconds; boot tests take ~30; screenshot
-capture about a minute (it types into the console).
+The boundary is intentional. PythonOS apps should not silently treat the
+host's real root or home directory as their own. Explicit host filesystem
+access can be exposed later through permissions.
 
-## Boot arguments
+## Boot and build pipeline
 
-| Argument | Effect |
-|---|---|
-| `pythonos.selftest=1` | run the 22 checks, print results, power off |
-| `pythonos.demo=1` | cycle splash → pyfetch → pytop → selftest, then start shells |
-| `pythonos.quiet=1` | skip the splash animation |
+```text
+make rootfs
+  curl Alpine minirootfs + LTS kernel
+  chroot apk add python3 openrc
 
-## Known limits
+make iso
+  copy system/ into /tmp/pyrootfs
+  configure OpenRC runlevel links
+  install PythonOS interpreter wrapper
+  cpio + gzip → release/initramfs-lts
+  xorriso + isolinux → release/pythonos-0.1.iso
 
-* x86_64 only; single-user (root); no networking; no persistent storage.
-* `pysh` implements a deliberate subset of POSIX shell: no `$(...)`
-  substitution or job control (`&` is parsed but not backgrounded).
-* `pyedit` is small on purpose: no search, no undo (yet).
-* The kernel is borrowed from Alpine. Reproducing it in-tree is roadmap
-  item 7.
+make test
+  QEMU → BusyBox init → OpenRC → pythonos service
+  selftest --guest → reboot(2)
+```
+
+The interpreter wrapper defaults `PYTHONHASHSEED=0` because an initramfs can
+start before the kernel's random number generator is seeded. This protects
+early Python startup even though Python is no longer PID 1.

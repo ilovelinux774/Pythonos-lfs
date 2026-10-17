@@ -1,16 +1,12 @@
-"""PythonOS PID 1.
+"""Legacy Python boot/session helpers.
 
-The kernel execs ``python3 -m init`` as the first process. Everything that
-follows — mounts, the boot splash, spawning the shell consoles and reaping
-orphans — is Python.
+Native mode now uses Alpine's BusyBox init and OpenRC. This module remains
+for the console demo and for compatibility with the first Python-PID1
+prototype; the production boot entry point is ``openrc_main.py``.
 
-Boot arguments honoured:
-    pythonos.selftest=1   run the built-in self-test, print results, power off
-    pythonos.quiet=1      skip the splash animation
-    pythonos.sh=path      shell to spawn (default: pysh)
-
-If /bin/init is this file, Python is the first program the kernel runs
-after the (prebuilt) kernel itself. The rootfs is our initramfs.
+Boot arguments honoured by the demo include ``pythonos.selftest=1`` and
+``pythonos.demo=1``. The hosted graphical entry point is
+``pythonos-desktop``.
 """
 
 import fcntl
@@ -205,7 +201,9 @@ def run_demo():
 
     def show_test():
         ansi.clear()
-        selftest.main()
+        # The demo is a guest boot even though OpenRC runs this service as a
+        # normal process rather than PID 1; request the guest checks explicitly.
+        selftest.main(["--guest"])
         ansi.show_cursor()
 
     try:

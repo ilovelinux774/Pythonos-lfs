@@ -1,12 +1,7 @@
-#!/usr/bin/python3
-"""PythonOS PID 1 — the kernel execs this file first."""
-
-import sys
-
-sys.path.insert(0, "/usr/lib/pythonos")
-sys.path.insert(0, "/usr/lib")
-
-from pythonos import init_main
-
-if __name__ == "__main__":
-    sys.exit(init_main.main())
+#!/bin/sh
+# PythonOS native boot entrypoint.
+#
+# Alpine's BusyBox init remains PID 1 and hands service management to
+# OpenRC. Keeping this compatibility wrapper lets older boot commands that
+# use rdinit=/init continue to work while the real init is /sbin/init.
+exec /sbin/init "$@"

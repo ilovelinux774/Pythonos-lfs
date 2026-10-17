@@ -16,6 +16,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 LIB = os.path.join(ROOT, "system", "usr", "lib")
 PKG = os.path.join(LIB, "pythonos")
+# The repository also contains the hosted `pythonos` package. Keep the
+# native image package first for these shell tests; otherwise its imports of
+# pythonos.tui/pythonos.pysh would resolve to the hosted package.
+if ROOT in sys.path:
+    sys.path.remove(ROOT)
 for entry in (PKG, LIB):
     if entry not in sys.path:
         sys.path.insert(0, entry)

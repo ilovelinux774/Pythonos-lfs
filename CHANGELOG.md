@@ -2,6 +2,33 @@
 
 All notable changes to PythonOS are documented here.
 
+## Unreleased — modular desktop phase
+
+The project now has two intended runtimes: a hosted desktop that runs as a
+normal Python application on Linux, Windows and macOS, and a native Alpine
+image that uses OpenRC.
+
+### Added
+
+- `requirements.txt` and `pyproject.toml` for a standard editable Python
+  install.
+- `pythonos-desktop`, a PySide6-Essentials hosted desktop entry point.
+- PythonOS panel, application launcher, welcome screen, terminal, files,
+  settings and about applications.
+- Private hosted data directory at `~/.pythonos/`.
+- OpenRC in the Alpine rootfs and an explicit OpenRC runlevel configuration.
+- Native `pythonos` OpenRC service and Alpine/BusyBox gettys on tty1 and
+  ttyS0.
+- Native guest self-test now verifies OpenRC PID 1 and the default runlevel.
+- Hosted GUI offscreen smoke test and reproducible desktop screenshot.
+
+### Changed
+
+- Native `/init` is now a compatibility wrapper to Alpine's `/sbin/init`;
+  Python is the service/framework layer rather than a replacement PID 1.
+- The desktop architecture is platform-backed so the same Python application
+  model can later run in hosted, native and phone modes.
+
 ## [0.1.0] — 2026-10-17 — "Constrictor"
 
 The first bootable release. PythonOS boots on x86_64 from a 27 MB hybrid

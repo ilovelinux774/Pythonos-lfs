@@ -6,10 +6,13 @@ release/
 # python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.venv/
+.pythonos/
+.build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.egg-info/
 
 # editors / os
 .DS_Store
