@@ -54,6 +54,29 @@ app.quit()
         )
         self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
 
+    def test_terminal_cursor_blinks(self):
+        self._require_qt()
+        code = """
+from PySide6.QtWidgets import QApplication
+from pythonos.desktop.platform import HostPlatform
+from pythonos.desktop.terminal import TerminalEngine, TerminalView
+app = QApplication([])
+view = TerminalView(TerminalEngine(HostPlatform()))
+assert view.cursorWidth() == 0
+assert view._blink_timer.interval() == 530
+assert view._cursor_visible
+view._toggle_cursor()
+assert not view._cursor_visible
+view._toggle_cursor()
+assert view._cursor_visible
+app.quit()
+"""
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=20, env=self._gui_env(),
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+
     def test_terminal_is_single_buffer_not_chat_input(self):
         self._require_qt()
         code = """

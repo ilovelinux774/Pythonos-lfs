@@ -12,8 +12,8 @@ import datetime
 import shlex
 from typing import Callable
 
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QTextCursor
 from PySide6.QtWidgets import QPlainTextEdit, QVBoxLayout, QWidget
 
 from .platform import HostPlatform
@@ -146,13 +146,19 @@ class TerminalView(QPlainTextEdit):
         self.history: list[str] = []
         self.history_index = 0
         self.history_draft = ""
+        self._cursor_visible = True
+        self._blink_timer = QTimer(self)
+        self._blink_timer.setInterval(530)
+        self._blink_timer.timeout.connect(self._toggle_cursor)
 
         self.setObjectName("terminalOutput")
         self.setReadOnly(True)
         self.setUndoRedoEnabled(False)
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setFont(QFont("DejaVu Sans Mono", 10))
-        self.setCursorWidth(2)
+        # Draw the caret ourselves so its blink is consistent across Qt
+        # platforms and terminal focus changes.
+        self.setCursorWidth(0)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._write("PythonOS terminal · hosted mode\n")
         self._write("Type help for commands. Ctrl-L clears the screen.\n\n")
@@ -174,6 +180,16 @@ class TerminalView(QPlainTextEdit):
         cursor.setPosition(max(0, position))
         self.setTextCursor(cursor)
         self.ensureCursorVisible()
+        self._reset_cursor_blink()
+
+    def _toggle_cursor(self) -> None:
+        self._cursor_visible = not self._cursor_visible
+        self.viewport().update()
+
+    def _reset_cursor_blink(self) -> None:
+        self._cursor_visible = True
+        self._blink_timer.start()
+        self.viewport().update()
 
     def _refresh_cursor(self) -> None:
         self._set_cursor(self.prompt_position + self.line_cursor)
@@ -276,6 +292,27 @@ class TerminalView(QPlainTextEdit):
         self._set_cursor(self._document_end())
         self._write("^C\n")
         self._new_prompt()
+
+    def paintEvent(self, event):  # noqa: N802
+        super().paintEvent(event)
+        if not self.hasFocus() or not self._cursor_visible:
+            return
+        rect = self.cursorRect(self.textCursor())
+        painter = QPainter(self.viewport())
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#65e6e0"))
+        painter.drawRect(rect.left(), rect.top(), 2, max(14, rect.height()))
+        painter.end()
+
+    def focusInEvent(self, event):  # noqa: N802
+        super().focusInEvent(event)
+        self._reset_cursor_blink()
+
+    def focusOutEvent(self, event):  # noqa: N802
+        super().focusOutEvent(event)
+        self._cursor_visible = False
+        self._blink_timer.stop()
+        self.viewport().update()
 
     def keyPressEvent(self, event):  # noqa: N802
         key = event.key()
