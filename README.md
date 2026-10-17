@@ -1,5 +1,7 @@
 # PythonOS
 
+[![build-and-boot](https://github.com/ilovelinux774/Pythonos-lfs/actions/workflows/build.yml/badge.svg)](https://github.com/ilovelinux774/Pythonos-lfs/actions/workflows/build.yml)
+
 **A Linux distribution whose userland is Python.**
 
 The kernel is Linux. Everything above it — PID 1, the init system, the shell,
@@ -112,6 +114,10 @@ The self-test checks that PID 1 is Python, that `/proc` and friends are
 mounted, and then drives `pysh` through pipelines, redirects, globbing,
 file round-trips, the text tools, both TUI apps and a full
 `pkg install → run → remove` cycle. See `release/boot-selftest.log`.
+
+CI does exactly this on every push — it stages the rootfs, builds the ISO,
+boots it in QEMU and fails the build unless the self-test passes. The
+badge above is that boot test, not a linter.
 
 ## Repository layout
 
