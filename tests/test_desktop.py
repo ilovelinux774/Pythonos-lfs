@@ -65,7 +65,7 @@ assert window.native
 assert window.windowTitle().endswith(\"native desktop\")
 window.open_app(\"welcome\")
 labels = [label.text().lower() for label in window.windows[\"welcome\"].widget().findChildren(QLabel)]
-assert any(\"native alpine linux\" in label for label in labels)
+assert any(\"native pythonos desktop\" in label and \"alpine linux\" in label for label in labels)
 assert set(window.task_buttons) == {\"welcome\"}
 app.quit()
 """
