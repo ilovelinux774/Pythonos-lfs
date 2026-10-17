@@ -27,9 +27,32 @@ CACHE = os.path.join(BASE, ".cache-dl")
 RELEASE = os.path.join(BASE, "release")
 ISO_STAGE = "/tmp/pythonos-iso"
 KERNEL_SRC = os.path.join(CACHE, "vmlinuz-lts")
-ISOLINUX_BIN = "/usr/lib/ISOLINUX/isolinux.bin"
-ISOHDPFX_BIN = "/usr/lib/ISOLINUX/isohdpfx.bin"
-LDLINUX_C32 = "/usr/lib/syslinux/modules/bios/ldlinux.c32"
+SYSLINUX_SEARCH = (
+    "/usr/lib/ISOLINUX", "/usr/lib/syslinux", "/usr/lib/syslinux/modules/bios",
+    "/usr/share/syslinux", "/usr/share/syslinux/modules/bios",
+)
+
+
+def find_syslinux(name):
+    """Locate an isolinux/syslinux file across distro layouts."""
+    candidates = [os.path.join(directory, name) for directory in SYSLINUX_SEARCH]
+    candidates.append(os.path.join("/usr/lib/ISOLINUX", name))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    base = shutil.which("isolinux.bin")
+    if base:
+        return base
+    for root in ("/usr/lib", "/usr/share"):
+        for dirpath, _dirs, files in os.walk(root):
+            if name in files and "syslinux" in dirpath.lower():
+                return os.path.join(dirpath, name)
+    sys.exit(
+        f"error: {name} not found. Install the isolinux/syslinux package:\n"
+        f"  Debian/Ubuntu: sudo apt install isolinux syslinux-common\n"
+        f"  Fedora:        sudo dnf install syslinux\n"
+        f"  Alpine:        sudo apk add syslinux"
+    )
 
 EXECUTABLES = (
     "init",
@@ -161,8 +184,9 @@ def build_iso(initramfs):
 
     shutil.copy2(KERNEL_SRC, os.path.join(boot_dir, "vmlinuz-lts"))
     shutil.copy2(initramfs, os.path.join(boot_dir, "initramfs-lts"))
-    shutil.copy2(ISOLINUX_BIN, os.path.join(isolinux_dir, "isolinux.bin"))
-    shutil.copy2(LDLINUX_C32, os.path.join(isolinux_dir, "ldlinux.c32"))
+    shutil.copy2(find_syslinux("isolinux.bin"), os.path.join(isolinux_dir, "isolinux.bin"))
+    shutil.copy2(find_syslinux("ldlinux.c32"), os.path.join(isolinux_dir, "ldlinux.c32"))
+    isohdpfx = find_syslinux("isohdpfx.bin")
 
     with open(os.path.join(isolinux_dir, "isolinux.cfg"), "w", encoding="utf-8") as fh:
         fh.write(
@@ -205,7 +229,7 @@ def build_iso(initramfs):
     run([
         "xorriso", "-as", "mkisofs",
         "-o", iso_path,
-        "-isohybrid-mbr", ISOHDPFX_BIN,
+        "-isohybrid-mbr", isohdpfx,
         "-c", "isolinux/boot.cat",
         "-b", "isolinux/isolinux.bin",
         "-no-emul-boot", "-boot-load-size", "4", "-boot-info-table",

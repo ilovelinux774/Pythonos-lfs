@@ -19,7 +19,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip
+          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common
 
       - name: Host-side unit tests
         run: make unittest
