@@ -13,8 +13,9 @@ image that uses OpenRC.
 - `requirements.txt` and `pyproject.toml` for a standard editable Python
   install (Python 3.9+).
 - `pythonos-desktop`, a PySide6-Essentials hosted desktop entry point.
-- PythonOS panel, application launcher, welcome screen, terminal, files,
-  settings and about applications.
+- PythonOS panel, taskbar, application launcher, welcome screen, terminal,
+  files, settings and about applications. The taskbar tracks open windows,
+  supports minimize/restore and includes host/status indicators and a clock.
 - Private hosted data directory at `~/.pythonos/`.
 - OpenRC in the Alpine rootfs and an explicit OpenRC runlevel configuration.
 - Native `pythonos` OpenRC service and Alpine/BusyBox gettys on tty1 and

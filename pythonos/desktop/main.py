@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QDateTime, QTimer, Qt
+from PySide6.QtCore import QDateTime, QPoint, QTimer, Qt
 from PySide6.QtGui import QAction, QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication,
@@ -21,8 +21,9 @@ from PySide6.QtWidgets import (
     QMdiSubWindow,
     QMessageBox,
     QPushButton,
-    QStatusBar,
+    QMenu,
     QToolButton,
+    QHBoxLayout,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +36,13 @@ from .terminal import TerminalWidget
 STYLE = """
 QMainWindow, QWidget#desktopRoot { background: #0d1321; color: #e7edf7; }
 QWidget#panel { background: #121c2f; border-bottom: 1px solid #263650; }
+QWidget#taskbar { background: #121c2f; border-top: 1px solid #263650; }
+QPushButton#startButton { background: #1b5362; border-color: #65e6e0; font-weight: 700; padding: 8px 15px; }
+QPushButton#startButton:hover { background: #257487; }
+QPushButton#desktopButton { padding: 8px 11px; }
+QPushButton#taskButton { padding: 7px 12px; min-width: 130px; max-width: 220px; text-align: left; }
+QPushButton#taskButton:checked { background: #2a486a; border-color: #65e6e0; }
+QLabel#tray { color: #8fa5bf; padding: 0 5px; }
 QLabel#brand { color: #65e6e0; font-size: 18px; font-weight: 700; }
 QLabel#version { color: #8191aa; font-size: 11px; }
 QPushButton, QToolButton { background: #1c2a43; border: 1px solid #314566; border-radius: 7px; color: #e7edf7; padding: 7px 13px; }
@@ -178,6 +186,13 @@ class AboutWidget(QWidget):
 
 
 class DesktopWindow(QMainWindow):
+    """The PythonOS desktop shell.
+
+    The taskbar is deliberately part of the Python UI rather than a host-OS
+    integration. It owns the launcher, window buttons, desktop toggle and
+    status tray, so the same shell can be reused by native mode later.
+    """
+
     def __init__(self, platform: HostPlatform | None = None):
         super().__init__()
         self.platform = platform or HostPlatform()
@@ -187,6 +202,8 @@ class DesktopWindow(QMainWindow):
         self.setObjectName("desktopRoot")
         self.setStyleSheet(STYLE)
         self.windows: dict[str, QMdiSubWindow] = {}
+        self.task_buttons: dict[str, QPushButton] = {}
+        self._desktop_hidden = False
         self._build_ui()
         self._clock = QTimer(self)
         self._clock.timeout.connect(self.update_clock)
@@ -199,54 +216,137 @@ class DesktopWindow(QMainWindow):
         layout = QVBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+
+        # A slim top identity bar. The actual desktop taskbar is at the
+        # bottom, like a conventional desktop environment.
         panel = QWidget()
         panel.setObjectName("panel")
-        panel_layout = QGridLayout(panel)
+        panel_layout = QHBoxLayout(panel)
         panel_layout.setContentsMargins(14, 8, 14, 8)
+        panel_layout.setSpacing(9)
         brand = QLabel("PythonOS")
         brand.setObjectName("brand")
-        panel_layout.addWidget(brand, 0, 0)
+        panel_layout.addWidget(brand)
         version = QLabel(f"{__version__} · {__codename__}")
         version.setObjectName("version")
-        panel_layout.addWidget(version, 0, 1)
-        launcher = QToolButton()
-        launcher.setText("Applications ▾")
-        launcher.clicked.connect(self.show_launcher)
-        panel_layout.addWidget(launcher, 0, 2)
-        panel_layout.setColumnStretch(3, 1)
-        self.clock = QLabel()
-        self.clock.setObjectName("clock")
-        panel_layout.addWidget(self.clock, 0, 4)
+        panel_layout.addWidget(version)
+        panel_layout.addStretch()
+        mode = QLabel("HOSTED DESKTOP")
+        mode.setObjectName("version")
+        panel_layout.addWidget(mode)
         layout.addWidget(panel)
 
         self.mdi = QMdiArea()
         self.mdi.setViewMode(QMdiArea.ViewMode.SubWindowView)
         self.mdi.setBackground(QColor("#0d1321"))
-        layout.addWidget(self.mdi)
+        self.mdi.subWindowActivated.connect(self._active_window_changed)
+        layout.addWidget(self.mdi, 1)
+
+        # Bottom taskbar: launcher, desktop toggle, live app buttons, tray and clock.
+        taskbar = QWidget()
+        taskbar.setObjectName("taskbar")
+        taskbar_layout = QHBoxLayout(taskbar)
+        taskbar_layout.setContentsMargins(10, 7, 10, 7)
+        taskbar_layout.setSpacing(7)
+
+        self.start_button = QPushButton("◈  PythonOS")
+        self.start_button.setObjectName("startButton")
+        self.start_button.clicked.connect(self.show_launcher)
+        taskbar_layout.addWidget(self.start_button)
+
+        desktop_button = QPushButton("Desktop")
+        desktop_button.setObjectName("desktopButton")
+        desktop_button.setToolTip("Show or restore desktop windows")
+        desktop_button.clicked.connect(self.show_desktop)
+        taskbar_layout.addWidget(desktop_button)
+
+        self.window_button_host = QWidget()
+        self.window_buttons_layout = QHBoxLayout(self.window_button_host)
+        self.window_buttons_layout.setContentsMargins(4, 0, 0, 0)
+        self.window_buttons_layout.setSpacing(5)
+        taskbar_layout.addWidget(self.window_button_host, 1)
+
+        host_label = QLabel("● HOST")
+        host_label.setObjectName("tray")
+        online_label = QLabel("⌁ ONLINE")
+        online_label.setObjectName("tray")
+        taskbar_layout.addWidget(host_label)
+        taskbar_layout.addWidget(online_label)
+        self.clock = QLabel()
+        self.clock.setObjectName("clock")
+        taskbar_layout.addWidget(self.clock)
+        layout.addWidget(taskbar)
+
         self.setCentralWidget(root)
-        self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("Hosted mode · private files in ~/.pythonos/files")
         self.open_app("welcome")
 
     def update_clock(self):
         self.clock.setText(QDateTime.currentDateTime().toString("ddd  dd MMM  HH:mm"))
 
     def show_launcher(self):
-        menu = self.menuBar().addMenu("Applications")
-        menu.aboutToHide.connect(menu.deleteLater)
+        menu = QMenu(self)
+        menu.setStyleSheet(STYLE)
+        menu.addAction("Open Welcome", lambda: self.open_app("welcome"))
+        menu.addSeparator()
         for name, title in (("terminal", "Terminal"), ("files", "Files"),
                             ("settings", "Settings"), ("about", "About")):
-            action = QAction(title, menu)
-            action.triggered.connect(lambda checked=False, n=name: self.open_app(n))
-            menu.addAction(action)
-        menu.popup(self.mapToGlobal(self.rect().topLeft() + self.rect().topLeft()))
+            menu.addAction(title, lambda n=name: self.open_app(n))
+        menu.addSeparator()
+        menu.addAction("Toggle fullscreen", self.toggle_fullscreen)
+        menu.addAction("Exit PythonOS", self.close)
+        point = self.start_button.mapToGlobal(QPoint(0, -menu.sizeHint().height()))
+        menu.exec(point)
+
+    def show_desktop(self):
+        windows = list(self.windows.values())
+        if not windows:
+            self.open_app("welcome")
+            return
+        if self._desktop_hidden:
+            for window in windows:
+                window.showNormal()
+            self._desktop_hidden = False
+        else:
+            for window in windows:
+                window.showMinimized()
+            self._desktop_hidden = True
+
+    def _add_task_button(self, name: str, window: QMdiSubWindow):
+        button = QPushButton(window.windowTitle())
+        button.setObjectName("taskButton")
+        button.setCheckable(True)
+        button.setToolTip(f"Switch to {window.windowTitle()}")
+        button.clicked.connect(lambda checked=False, n=name: self.activate_app(n))
+        self.window_buttons_layout.addWidget(button)
+        self.task_buttons[name] = button
+
+    def _remove_task_button(self, name: str):
+        button = self.task_buttons.pop(name, None)
+        if button is not None:
+            self.window_buttons_layout.removeWidget(button)
+            button.deleteLater()
+
+    def _active_window_changed(self, window):
+        active = self.mdi.activeSubWindow()
+        for name, button in self.task_buttons.items():
+            button.setChecked(self.windows.get(name) is active)
+
+    def activate_app(self, name: str):
+        window = self.windows.get(name)
+        if window is None:
+            self.open_app(name)
+            return
+        if self.mdi.activeSubWindow() is window and not window.isMinimized():
+            window.showMinimized()
+            return
+        window.showNormal()
+        window.raise_()
+        self.mdi.setActiveSubWindow(window)
+        self._desktop_hidden = False
 
     def open_app(self, name: str):
         if name in self.windows:
-            window = self.windows[name]
-            window.show()
-            window.raise_()
-            self.mdi.setActiveSubWindow(window)
+            self.activate_app(name)
             return
         if name == "welcome":
             widget = WelcomeWidget(self.platform, self.open_app)
@@ -267,16 +367,23 @@ class DesktopWindow(QMainWindow):
             QMessageBox.warning(self, "Unknown application", name)
             return
         sub = self.mdi.addSubWindow(widget)
+        sub.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         sub.setWindowTitle(title)
         sub.resize(600, 430)
-        sub.destroyed.connect(lambda _obj=None, n=name: self.windows.pop(n, None))
+        sub.destroyed.connect(lambda _obj=None, n=name: self._window_destroyed(n))
         self.windows[name] = sub
+        self._add_task_button(name, sub)
         sub.show()
         if name == "welcome":
             sub.resize(760, 500)
             sub.move(70, 55)
         else:
             sub.move(110 + len(self.windows) * 20, 70 + len(self.windows) * 15)
+        self.mdi.setActiveSubWindow(sub)
+
+    def _window_destroyed(self, name: str):
+        self.windows.pop(name, None)
+        self._remove_task_button(name)
 
     def toggle_fullscreen(self):
         if self.isFullScreen():

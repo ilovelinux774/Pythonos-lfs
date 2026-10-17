@@ -54,7 +54,11 @@ session:
 
 The first hosted desktop opens as a normal application window with:
 
-- a PythonOS desktop and panel
+- a PythonOS desktop and top identity panel
+- a bottom taskbar with PythonOS launcher
+- live buttons for every open application window
+- minimize/restore desktop control
+- clock and host/status indicators
 - application launcher
 - PythonOS terminal
 - private virtual filesystem and file browser

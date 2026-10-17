@@ -12,17 +12,45 @@ import unittest
 
 
 class HostedDesktopTests(unittest.TestCase):
-    def test_entrypoint_creates_desktop(self):
+    def _gui_env(self):
+        env = dict(os.environ)
+        env["QT_QPA_PLATFORM"] = "offscreen"
+        env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return env
+
+    def _require_qt(self):
         try:
             import PySide6  # noqa: F401
         except ImportError:
             self.skipTest("install requirements.txt for the hosted GUI")
-        env = dict(os.environ)
-        env["QT_QPA_PLATFORM"] = "offscreen"
-        env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def test_entrypoint_creates_desktop(self):
+        self._require_qt()
         proc = subprocess.run(
             [sys.executable, "-m", "pythonos.desktop.main", "--smoke-test"],
-            capture_output=True, text=True, timeout=20, env=env,
+            capture_output=True, text=True, timeout=20, env=self._gui_env(),
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+
+    def test_taskbar_tracks_open_apps(self):
+        self._require_qt()
+        code = """
+from PySide6.QtWidgets import QApplication
+from pythonos.desktop.main import DesktopWindow
+app = QApplication([])
+window = DesktopWindow()
+for name in (\"terminal\", \"files\", \"settings\", \"about\"):
+    window.open_app(name)
+assert set(window.task_buttons) == {\"welcome\", \"terminal\", \"files\", \"settings\", \"about\"}
+window.show_desktop()
+assert all(item.isMinimized() for item in window.windows.values())
+window.show_desktop()
+assert all(not item.isMinimized() for item in window.windows.values())
+app.quit()
+"""
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=20, env=self._gui_env(),
         )
         self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
 

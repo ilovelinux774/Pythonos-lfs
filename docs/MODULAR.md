@@ -33,8 +33,10 @@ pythonos-desktop
 
 `pythonos-desktop` opens a PythonOS desktop window. Hosted mode uses PySide6
 for portable native window creation and drawing. Qt is the native C++ layer;
-the desktop logic, widgets, apps, launcher, terminal and application APIs
-are Python. Qt selects X11/Wayland, Win32 or macOS graphics underneath, so
+the desktop logic, widgets, apps, launcher, terminal, taskbar and application
+APIs are Python. The taskbar owns open-window buttons, minimize/restore,
+status indicators and the clock rather than delegating the desktop experience
+to the host OS. Qt selects X11/Wayland, Win32 or macOS graphics underneath, so
 PythonOS does not require X11 on every host.
 
 Hosted mode keeps its data in `~/.pythonos/` by default:
