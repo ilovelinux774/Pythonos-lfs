@@ -54,6 +54,26 @@ app.quit()
         )
         self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
 
+    def test_terminal_is_single_buffer_not_chat_input(self):
+        self._require_qt()
+        code = """
+from PySide6.QtWidgets import QApplication
+from pythonos.desktop.platform import HostPlatform
+from pythonos.desktop.terminal import TerminalEngine, TerminalView
+app = QApplication([])
+view = TerminalView(TerminalEngine(HostPlatform()))
+assert not hasattr(view, \"input\")
+view._insert_text(\"echo hello\")
+view._submit()
+assert \"pythonos:~$ echo hello\\nhello\\npythonos:~$ \" in view.toPlainText()
+app.quit()
+"""
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=20, env=self._gui_env(),
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

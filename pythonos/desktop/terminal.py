@@ -1,8 +1,8 @@
-"""A small PythonOS terminal for hosted mode.
+"""A real, line-oriented PythonOS terminal for hosted mode.
 
-It is intentionally a Python command dispatcher rather than a wrapper around
-bash/cmd.exe. That keeps the same command vocabulary on Linux, Windows and
-macOS and gives native mode a compatible terminal later.
+This is intentionally a terminal screen rather than a chat transcript: the
+prompt, command and output share one monospaced buffer, and keyboard editing
+happens at the live cursor on that buffer.
 """
 
 from __future__ import annotations
@@ -10,15 +10,16 @@ from __future__ import annotations
 import ast
 import datetime
 import shlex
-import sys
-from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtWidgets import QPlainTextEdit, QVBoxLayout, QWidget
 
 from .platform import HostPlatform
+
+
+CLEAR_SCREEN = "\x00PYTHONOS_CLEAR_SCREEN\x00"
 
 
 class TerminalEngine:
@@ -27,6 +28,7 @@ class TerminalEngine:
         self.opener = opener
         self.commands = {
             "apps": self._apps,
+            "cd": self._cd,
             "clear": self._clear,
             "date": self._date,
             "echo": self._echo,
@@ -39,6 +41,11 @@ class TerminalEngine:
             "whoami": self._whoami,
         }
         self.last_status = 0
+
+    def prompt(self) -> str:
+        relative = self.platform.cwd.relative_to(self.platform.paths.files)
+        location = "~" if str(relative) == "." else "~/" + str(relative)
+        return f"pythonos:{location}$ "
 
     def execute(self, line: str) -> tuple[str, bool]:
         try:
@@ -64,8 +71,9 @@ class TerminalEngine:
             return f"{command}: {exc}", False
 
     def _help(self, _args: list[str]) -> str:
-        return ("PythonOS hosted terminal\n\n"
+        return ("PythonOS terminal\n\n"
                 "  apps                 list desktop applications\n"
+                "  cd [PATH]            change the virtual directory\n"
                 "  date                 show the host date and time\n"
                 "  echo TEXT            print text\n"
                 "  ls [PATH]            list PythonOS files\n"
@@ -79,6 +87,14 @@ class TerminalEngine:
     def _apps(self, _args: list[str]) -> str:
         return "Terminal\nFiles\nSettings\nAbout"
 
+    def _cd(self, args: list[str]) -> str:
+        target = args[0] if args else "~"
+        path = self.platform.virtual_path(target)
+        if not path.is_dir():
+            raise NotADirectoryError(target)
+        self.platform.cwd = path
+        return ""
+
     def _date(self, _args: list[str]) -> str:
         return datetime.datetime.now().astimezone().strftime("%a %d %b %Y %H:%M:%S %Z")
 
@@ -90,8 +106,7 @@ class TerminalEngine:
         return "\n".join(("[DIR] " if p.is_dir() else "      ") + p.name for p in entries) or "(empty)"
 
     def _pwd(self, _args: list[str]) -> str:
-        relative = self.platform.cwd.relative_to(self.platform.paths.files)
-        return "~" if str(relative) == "." else "~/" + str(relative)
+        return self.prompt().split(":", 1)[1].rsplit("$", 1)[0].strip()
 
     def _py(self, args: list[str]) -> str:
         if not args:
@@ -116,71 +131,248 @@ class TerminalEngine:
         return "pythonos-user"
 
     def _clear(self, _args: list[str]) -> str:
-        return "\x1b[2J\x1b[H"
+        return CLEAR_SCREEN
+
+
+class TerminalView(QPlainTextEdit):
+    """Single-buffer terminal screen with a real editable prompt."""
+
+    def __init__(self, engine: TerminalEngine):
+        super().__init__()
+        self.engine = engine
+        self.current_line = ""
+        self.line_cursor = 0
+        self.prompt_position = 0
+        self.history: list[str] = []
+        self.history_index = 0
+        self.history_draft = ""
+
+        self.setObjectName("terminalOutput")
+        self.setReadOnly(True)
+        self.setUndoRedoEnabled(False)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        self.setFont(QFont("DejaVu Sans Mono", 10))
+        self.setCursorWidth(2)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._write("PythonOS terminal · hosted mode\n")
+        self._write("Type help for commands. Ctrl-L clears the screen.\n\n")
+        self._new_prompt()
+
+    def _document_end(self) -> int:
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        return cursor.position()
+
+    def _write(self, text: str) -> None:
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(text)
+        self.setTextCursor(cursor)
+
+    def _set_cursor(self, position: int) -> None:
+        cursor = self.textCursor()
+        cursor.setPosition(max(0, position))
+        self.setTextCursor(cursor)
+        self.ensureCursorVisible()
+
+    def _refresh_cursor(self) -> None:
+        self._set_cursor(self.prompt_position + self.line_cursor)
+
+    def _new_prompt(self) -> None:
+        self._write(self.engine.prompt())
+        self.prompt_position = self._document_end()
+        self.current_line = ""
+        self.line_cursor = 0
+        self.history_index = len(self.history)
+        self.history_draft = ""
+        self._refresh_cursor()
+        self.setFocus()
+
+    def _replace_current_line(self, text: str) -> None:
+        cursor = self.textCursor()
+        cursor.setPosition(self.prompt_position)
+        cursor.setPosition(self.prompt_position + len(self.current_line),
+                           QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.insertText(text)
+        self.current_line = text
+        self.line_cursor = len(text)
+        self._refresh_cursor()
+
+    def _insert_text(self, text: str) -> None:
+        if not text:
+            return
+        cursor = self.textCursor()
+        cursor.setPosition(self.prompt_position + self.line_cursor)
+        cursor.insertText(text)
+        self.current_line = (self.current_line[:self.line_cursor] + text
+                             + self.current_line[self.line_cursor:])
+        self.line_cursor += len(text)
+        self._refresh_cursor()
+
+    def _backspace(self) -> None:
+        if self.line_cursor == 0:
+            return
+        cursor = self.textCursor()
+        cursor.setPosition(self.prompt_position + self.line_cursor - 1)
+        cursor.setPosition(self.prompt_position + self.line_cursor,
+                           QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        self.current_line = (self.current_line[:self.line_cursor - 1]
+                             + self.current_line[self.line_cursor:])
+        self.line_cursor -= 1
+        self._refresh_cursor()
+
+    def _delete(self) -> None:
+        if self.line_cursor >= len(self.current_line):
+            return
+        cursor = self.textCursor()
+        cursor.setPosition(self.prompt_position + self.line_cursor)
+        cursor.setPosition(self.prompt_position + self.line_cursor + 1,
+                           QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        self.current_line = (self.current_line[:self.line_cursor]
+                             + self.current_line[self.line_cursor + 1:])
+        self._refresh_cursor()
+
+    def _submit(self) -> None:
+        line = self.current_line
+        if line:
+            self.history.append(line)
+        self.history_index = len(self.history)
+        self.history_draft = ""
+        self._set_cursor(self._document_end())
+        self._write("\n")
+        output, should_close = self.engine.execute(line)
+        if output == CLEAR_SCREEN:
+            self.clear()
+        elif output:
+            self._write(output)
+            if not output.endswith("\n"):
+                self._write("\n")
+        if should_close:
+            self.window().close()
+            return
+        self._new_prompt()
+
+    def _history_up(self) -> None:
+        if not self.history:
+            return
+        if self.history_index == len(self.history):
+            self.history_draft = self.current_line
+        self.history_index = max(0, self.history_index - 1)
+        self._replace_current_line(self.history[self.history_index])
+
+    def _history_down(self) -> None:
+        if not self.history:
+            return
+        self.history_index = min(len(self.history), self.history_index + 1)
+        if self.history_index == len(self.history):
+            self._replace_current_line(self.history_draft)
+        else:
+            self._replace_current_line(self.history[self.history_index])
+
+    def _interrupt(self) -> None:
+        self._set_cursor(self._document_end())
+        self._write("^C\n")
+        self._new_prompt()
+
+    def keyPressEvent(self, event):  # noqa: N802
+        key = event.key()
+        modifiers = event.modifiers()
+        control = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+
+        if control and key == Qt.Key.Key_C:
+            if self.textCursor().hasSelection():
+                self.copy()
+            else:
+                self._interrupt()
+            return
+        if control and key == Qt.Key.Key_L:
+            self.clear()
+            self._new_prompt()
+            return
+        if control and key == Qt.Key.Key_A:
+            self.line_cursor = 0
+            self._refresh_cursor()
+            return
+        if control and key == Qt.Key.Key_E:
+            self.line_cursor = len(self.current_line)
+            self._refresh_cursor()
+            return
+        if control and key == Qt.Key.Key_U:
+            self._replace_current_line("")
+            return
+        if control and key == Qt.Key.Key_W:
+            before = self.current_line[:self.line_cursor].rstrip()
+            new_cursor = before.rfind(" ") + 1
+            self._replace_current_line(before[:new_cursor] + self.current_line[self.line_cursor:])
+            self.line_cursor = new_cursor
+            self._refresh_cursor()
+            return
+        if control and key == Qt.Key.Key_D and not self.current_line:
+            self.window().close()
+            return
+
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._submit()
+            return
+        if key == Qt.Key.Key_Backspace:
+            self._backspace()
+            return
+        if key == Qt.Key.Key_Delete:
+            self._delete()
+            return
+        if key == Qt.Key.Key_Left:
+            self.line_cursor = max(0, self.line_cursor - 1)
+            self._refresh_cursor()
+            return
+        if key == Qt.Key.Key_Right:
+            self.line_cursor = min(len(self.current_line), self.line_cursor + 1)
+            self._refresh_cursor()
+            return
+        if key == Qt.Key.Key_Home:
+            self.line_cursor = 0
+            self._refresh_cursor()
+            return
+        if key == Qt.Key.Key_End:
+            self.line_cursor = len(self.current_line)
+            self._refresh_cursor()
+            return
+        if key == Qt.Key.Key_Up:
+            self._history_up()
+            return
+        if key == Qt.Key.Key_Down:
+            self._history_down()
+            return
+        if key == Qt.Key.Key_Tab:
+            self._insert_text("    ")
+            return
+
+        if not (modifiers & (Qt.KeyboardModifier.ControlModifier
+                             | Qt.KeyboardModifier.AltModifier
+                             | Qt.KeyboardModifier.MetaModifier)):
+            text = event.text()
+            if text and text.isprintable():
+                self._insert_text(text)
+                return
+
+        # Keep scrolling, selection and other standard read-only behavior.
+        super().keyPressEvent(event)
+        self._refresh_cursor()
+
+    def mousePressEvent(self, event):  # noqa: N802
+        super().mousePressEvent(event)
+        # The buffer is selectable, but commands can only be edited after the
+        # live prompt. A click therefore returns the insertion point to it.
+        self._refresh_cursor()
 
 
 class TerminalWidget(QWidget):
     def __init__(self, platform: HostPlatform, opener: Callable[[str], None] | None = None):
         super().__init__()
         self.engine = TerminalEngine(platform, opener)
-        self.output = QPlainTextEdit()
-        self.output.setReadOnly(True)
-        self.output.setFont(QFont("DejaVu Sans Mono", 10))
-        self.output.setObjectName("terminalOutput")
-        self.input = QLineEdit()
-        self.input.setPlaceholderText("Type help to see PythonOS commands")
-        self.input.setFont(QFont("DejaVu Sans Mono", 10))
-        self.input.returnPressed.connect(self.run_line)
+        self.output = TerminalView(self.engine)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.addWidget(self.output)
-        layout.addWidget(self.input)
-        self.history: list[str] = []
-        self.history_index = 0
-        self.input.installEventFilter(self)
-        self.write("PythonOS terminal · hosted mode\nType help for commands.\n")
-        self.prompt()
-
-    def prompt(self) -> None:
-        self.write("\npythonos:~$ ", newline=False)
-
-    def write(self, text: str, newline: bool = True) -> None:
-        if newline:
-            self.output.appendPlainText(text)
-        else:
-            cursor = self.output.textCursor()
-            cursor.movePosition(cursor.MoveOperation.End)
-            cursor.insertText(text)
-            self.output.setTextCursor(cursor)
-
-    def run_line(self) -> None:
-        line = self.input.text().strip()
-        self.input.clear()
-        if line:
-            self.history.append(line)
-            self.history_index = len(self.history)
-        self.write(line)
-        output, should_close = self.engine.execute(line)
-        if output == "\x1b[2J\x1b[H":
-            self.output.clear()
-        elif output:
-            self.write(output)
-        if should_close:
-            window = self.window()
-            if window is not None:
-                window.close()
-            return
-        self.prompt()
-        self.output.ensureCursorVisible()
-
-    def eventFilter(self, watched, event):  # noqa: N802
-        if watched is self.input and event.type() == QEvent.Type.KeyPress:
-            if event.key() == Qt.Key.Key_Up and self.history:
-                self.history_index = max(0, self.history_index - 1)
-                self.input.setText(self.history[self.history_index])
-                return True
-            if event.key() == Qt.Key.Key_Down and self.history:
-                self.history_index = min(len(self.history), self.history_index + 1)
-                self.input.setText(self.history[self.history_index] if self.history_index < len(self.history) else "")
-                return True
-        return super().eventFilter(watched, event)
