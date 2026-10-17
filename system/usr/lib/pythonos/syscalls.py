@@ -10,13 +10,16 @@ import ctypes.util
 import os
 import platform
 
-try:
-    # These bindings are used by the Alpine/OpenRC native runtime. The
-    # hosted shell tests can still import the native userland on Windows and
-    # macOS, where there is no Linux libc exposing mount(2) and reboot(2).
-    _libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
-except (AttributeError, OSError):
-    _libc = None
+_libc = None
+if os.name != "nt":
+    try:
+        # These bindings are used by the Alpine/OpenRC native runtime. The
+        # hosted shell tests can still import the native userland on Windows
+        # and macOS, where there is no Linux libc exposing mount(2) and
+        # reboot(2).
+        _libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+    except (AttributeError, OSError):
+        _libc = None
 
 # mount(2) flags
 MS_RDONLY = 1
