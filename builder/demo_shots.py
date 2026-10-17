@@ -54,11 +54,14 @@ def main():
     if os.path.exists(LOG):
         os.remove(LOG)
 
+    staged_kernel = os.path.join(BASE, ".build", "pyrootfs", "boot", "vmlinuz-lts")
+    kernel = staged_kernel if os.path.isfile(staged_kernel) else os.path.join(BASE, ".cache-dl", "vmlinuz-lts")
+    memory = os.environ.get("PYTHONOS_QEMU_MEMORY", "768")
     qemu = [
         "qemu-system-x86_64",
-        "-m", "512", "-smp", "1",
+        "-m", memory, "-smp", "1",
         "-device", "virtio-rng-pci",
-        "-kernel", os.path.join(BASE, ".cache-dl", "vmlinuz-lts"),
+        "-kernel", kernel,
         "-initrd", os.path.join(BASE, "release", "initramfs-lts"),
         "-append", "console=ttyS0 quiet loglevel=3 rdinit=/init pythonos.demo=1",
         "-display", "none",

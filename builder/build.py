@@ -206,15 +206,32 @@ def overlay_rootfs():
 def build_initramfs():
     os.makedirs(RELEASE, exist_ok=True)
     out = os.path.join(RELEASE, "initramfs-lts")
-    cmd = (f"cd {ROOTFS} && find . -print0 | LC_ALL=C sort -z | "
-           f"cpio --null -o -H newc 2>/dev/null | gzip -9 > {out}")
+    cmd = (f"cd {ROOTFS} && find . "
+           f"-path './boot/vmlinuz-lts' -prune -o "
+           f"-path './boot/initramfs-lts' -prune -o "
+           f"-path './boot/System.map-*' -prune -o "
+           f"-path './boot/config-*' -prune -o -print0 | "
+           f"LC_ALL=C sort -z | cpio --null -o -H newc 2>/dev/null | "
+           f"gzip -9 > {out}")
     run(cmd)
     return out
 
 
+def kernel_source():
+    """Return the kernel matching the staged rootfs when one is present.
+
+    The native GUI profile installs Alpine's ``linux-lts`` package so its
+    DRM/input modules match the kernel. The small console profile has no
+    modules and continues to use the cached netboot kernel.
+    """
+    staged = os.path.join(ROOTFS, "boot", "vmlinuz-lts")
+    return staged if os.path.isfile(staged) else KERNEL_SRC
+
+
 def build_iso(initramfs):
-    if not os.path.exists(KERNEL_SRC):
-        sys.exit(f"error: kernel missing at {KERNEL_SRC}\n"
+    kernel = kernel_source()
+    if not os.path.exists(kernel):
+        sys.exit(f"error: kernel missing at {kernel}\n"
                  f"       run builder/prepare_rootfs.sh first (it downloads it)")
     step("Assembling ISO tree")
     if os.path.isdir(ISO_STAGE):
@@ -224,7 +241,7 @@ def build_iso(initramfs):
     os.makedirs(boot_dir)
     os.makedirs(isolinux_dir)
 
-    shutil.copy2(KERNEL_SRC, os.path.join(boot_dir, "vmlinuz-lts"))
+    shutil.copy2(kernel, os.path.join(boot_dir, "vmlinuz-lts"))
     shutil.copy2(initramfs, os.path.join(boot_dir, "initramfs-lts"))
     shutil.copy2(find_syslinux("isolinux.bin"), os.path.join(isolinux_dir, "isolinux.bin"))
     shutil.copy2(find_syslinux("ldlinux.c32"), os.path.join(isolinux_dir, "ldlinux.c32"))
@@ -261,7 +278,7 @@ def build_iso(initramfs):
             "PythonOS 0.1 \"Constrictor\"\n"
             "A Linux distribution whose userland is Python.\n\n"
             "Boot it in QEMU:\n"
-            "  qemu-system-x86_64 -m 512 -cdrom pythonos-0.1.iso\n\n"
+            "  qemu-system-x86_64 -m 768 -cdrom pythonos-0.1.iso\n\n"
             "Boot it on real hardware: write the ISO to a USB stick\n"
             "  dd if=pythonos-0.1.iso of=/dev/sdX bs=4M status=progress\n"
         )
@@ -348,7 +365,7 @@ def main():
         print(f"  initramfs : {initramfs}  ({human(initramfs)})")
     if iso:
         print(f"  ISO       : {iso}  ({human(iso)})")
-    print("\n  Boot it:  qemu-system-x86_64 -m 512 -cdrom "
+    print("\n  Boot it:  qemu-system-x86_64 -m 768 -cdrom "
           f"{iso or 'release/pythonos-0.1.iso'}")
 
 

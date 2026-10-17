@@ -150,9 +150,11 @@ make iso        # overlay PythonOS, pack initramfs and build hybrid ISO
 make test       # boot the image in QEMU and run the guest self-test
 make run        # boot it interactively
 
-# Optional native Xorg + PySide6 profile (large):
+# Native graphical profile: matching Alpine LTS kernel + Xorg + PySide6
 make rootfs-gui
 make iso-gui
+make test                 # serial/OpenRC self-test
+make run-iso              # graphical QEMU boot; console getty remains available
 ```
 
 The produced image is in `release/`:
@@ -169,6 +171,15 @@ SELFTEST PASSED — 22 passed, 0 failed
 It checks that OpenRC owns PID 1, that OpenRC reached the default runlevel,
 that core filesystems are mounted, and that PythonOS's shell, text tools,
 process tools, package manager and applications work.
+
+The native GUI profile uses the kernel staged with the rootfs, so its DRM
+modules cannot drift from the boot kernel. The build keeps the coherent DRM,
+AGP/TTM, virtio, input and HID module families, removes unused firmware and
+Qt/PySide6 payload, and enables the shared PythonOS desktop through the
+`pythonos-gui` OpenRC service. On QEMU's `-vga std`, Xorg uses the bochs DRM
+path and opens the same Welcome, Terminal, Files, Settings and About windows
+as hosted mode. If the GUI cannot start, the OpenRC getty fallback remains on
+`tty1` and `ttyS0` for diagnosis.
 
 ## Repository layout
 
@@ -216,7 +227,7 @@ docs/
 - [x] Hosted `pythonos-desktop` launcher
 - [x] Cross-platform desktop MVP with terminal, files, settings and launcher
 - [ ] Shared application/plugin manifests between hosted and native modes
-- [ ] Native graphical session in the Alpine image
+- [x] Native graphical session in the Alpine image
 - [ ] Python window manager/compositor integration
 - [ ] Network, audio and display services
 - [ ] Persistent native installation

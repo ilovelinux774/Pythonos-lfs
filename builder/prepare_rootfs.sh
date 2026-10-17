@@ -50,7 +50,52 @@ if [ "${PYTHONOS_NATIVE_GUI:-0}" = "1" ]; then
     echo "==> installing optional native graphical profile"
     chroot "$ROOTFS" /sbin/apk add --no-cache \
         py3-pyside6 xorg-server xinit xf86-video-fbdev xf86-input-libinput \
-        font-dejavu
+        font-dejavu linux-lts
+
+    # The GUI profile uses the matching Alpine kernel modules for QEMU and
+    # real hardware graphics/input. Firmware is intentionally removed from
+    # this small desktop image; it is not needed for the generic QEMU VGA
+    # device and can otherwise add more than a gigabyte to the ISO.
+    #
+    # Keep the kernel's graphics stack as a coherent module family. In
+    # particular, bochs-drm -> TTM -> AGP is a real dependency chain; pruning
+    # only the DRM directories makes modprobe report unresolved agp_* symbols
+    # and leaves Xorg with no screen. The input/HID and virtio families cover
+    # the generic native desktop and QEMU paths.
+    chroot "$ROOTFS" /bin/sh -c '
+        rm -rf /lib/firmware /boot/initramfs-lts /boot/System.map-* /boot/config-*
+        rm -rf /usr/share/qt6 /usr/share/PySide6 /usr/share/mime
+        KVER=$(ls -1 /lib/modules 2>/dev/null | head -n 1)
+        if [ -n "$KVER" ]; then
+            MODULES=/lib/modules/$KVER/kernel
+            find "$MODULES" -type f ! \( -path "$MODULES/drivers/gpu/drm/*" -o -path "$MODULES/drivers/char/agp/*" -o -path "$MODULES/drivers/virtio/*" -o -path "$MODULES/drivers/input/*" -o -path "$MODULES/drivers/hid/*" \) -delete
+            find "$MODULES" -type d -empty -delete
+            depmod -a "$KVER" 2>/dev/null || true
+        fi
+
+        # py3-pyside6 is an intentionally broad Alpine package. The shared
+        # PythonOS desktop currently needs only QtCore, QtGui and QtWidgets;
+        # remove the optional bindings and Qt development payload after apk
+        # has installed the runtime dependencies. Keep the XCB platform
+        # plugin and its small runtime library set for the native X session.
+        PYSIDE6=/usr/lib/python3.12/site-packages/PySide6
+        find "$PYSIDE6" -type f \( -name "Qt*.abi3.so" -o -name "Qt*.pyi" \) ! \
+            -name "QtCore.abi3.so" ! -name "QtCore.pyi" \
+            ! -name "QtGui.abi3.so" ! -name "QtGui.pyi" \
+            ! -name "QtWidgets.abi3.so" ! -name "QtWidgets.pyi" -delete
+        rm -rf /usr/lib/qt6/bin /usr/lib/qt6/libexec /usr/lib/qt6/metatypes \
+            /usr/lib/qt6/modules /usr/lib/qt6/qml /usr/lib/llvm17
+        find /usr/lib -maxdepth 1 \( -type f -o -type l \) -name "libQt6*.so*" ! \
+            -name "libQt6Core.so*" ! -name "libQt6DBus.so*" \
+            ! -name "libQt6Gui.so*" ! -name "libQt6Widgets.so*" \
+            ! -name "libQt6XcbQpa.so*" -delete
+        rm -f /usr/lib/libLLVM*.so* /usr/lib/libav*.so* /usr/lib/libSvt*.so* \
+            /usr/lib/libaom*.so* /usr/lib/libx264*.so* /usr/lib/libx265*.so* \
+            /usr/lib/libxvid*.so* /usr/lib/libvpx*.so* /usr/lib/libopenmpt*.so* \
+            /usr/lib/libbluray*.so* /usr/lib/libmpg123*.so* /usr/lib/librist*.so* \
+            /usr/lib/libsrt*.so*
+        rm -f /usr/lib/qt6/plugins/designer/libqwebengineview.so
+    '
 else
     echo "==> native graphical profile disabled (use PYTHONOS_NATIVE_GUI=1)"
 fi

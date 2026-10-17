@@ -6,6 +6,13 @@ set -uo pipefail
 BASE=$(cd "$(dirname "$0")/.." && pwd)
 LOG="$BASE/release/boot-selftest.log"
 TIMEOUT=${1:-240}
+MEMORY=${PYTHONOS_QEMU_MEMORY:-768}
+STAGED_KERNEL="$BASE/.build/pyrootfs/boot/vmlinuz-lts"
+if [ -f "$STAGED_KERNEL" ]; then
+    KERNEL="$STAGED_KERNEL"
+else
+    KERNEL="$BASE/.cache-dl/vmlinuz-lts"
+fi
 
 mkdir -p "$BASE/release" 2>/dev/null
 if ! : > "$LOG" 2>/dev/null; then
@@ -14,15 +21,15 @@ if ! : > "$LOG" 2>/dev/null; then
 fi
 rm -f "$LOG"
 
-if [ ! -f "$BASE/.cache-dl/vmlinuz-lts" ]; then
+if [ ! -f "$KERNEL" ]; then
     echo "error: kernel missing — run 'make rootfs' (builder/prepare_rootfs.sh) first" >&2
     exit 1
 fi
 
 echo "==> booting PythonOS in QEMU (timeout ${TIMEOUT}s)"
 timeout "$TIMEOUT" qemu-system-x86_64 \
-    -m 512 -smp 1 -device virtio-rng-pci \
-    -kernel "$BASE/.cache-dl/vmlinuz-lts" \
+    -m "$MEMORY" -smp 1 -device virtio-rng-pci \
+    -kernel "$KERNEL" \
     -initrd "$BASE/release/initramfs-lts" \
     -append "console=ttyS0 quiet loglevel=3 rdinit=/init pythonos.selftest=1" \
     -nographic -no-reboot -monitor none \

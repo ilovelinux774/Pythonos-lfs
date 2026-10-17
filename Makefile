@@ -9,7 +9,8 @@
 
 SHELL := /bin/bash
 PY := python3
-KERNEL := .cache-dl/vmlinuz-lts
+QEMU_MEMORY ?= 768
+KERNEL := $(if $(wildcard .build/pyrootfs/boot/vmlinuz-lts),.build/pyrootfs/boot/vmlinuz-lts,.cache-dl/vmlinuz-lts)
 INITRAMFS := release/initramfs-lts
 ISO := release/pythonos-0.1.iso
 
@@ -49,16 +50,16 @@ test:
 
 run:
 	@test -f $(ISO) || { echo "run 'make iso' first"; exit 1; }
-	qemu-system-x86_64 -m 512 -smp 1 -device virtio-rng-pci \
+	qemu-system-x86_64 -m $(QEMU_MEMORY) -smp 1 -device virtio-rng-pci \
 		-cdrom $(ISO) -serial mon:stdio
 
 run-iso:
 	@test -f $(ISO) || { echo "run 'make iso' first"; exit 1; }
-	qemu-system-x86_64 -m 512 -cdrom $(ISO)
+	qemu-system-x86_64 -m $(QEMU_MEMORY) -cdrom $(ISO)
 
 run-serial:
 	@test -f $(INITRAMFS) || { echo "run 'make iso' first"; exit 1; }
-	qemu-system-x86_64 -m 512 -nographic \
+	qemu-system-x86_64 -m $(QEMU_MEMORY) -nographic \
 		-kernel $(KERNEL) -initrd $(INITRAMFS) \
 		-append "console=ttyS0 rdinit=/init"
 

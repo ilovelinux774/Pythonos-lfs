@@ -74,17 +74,24 @@ unpacks the rootfs to `/tmp/pyrootfs`, and installs `python3 openrc` with
 Alpine's `apk`. Alpine supplies the low-level C plumbing and service manager;
 PythonOS supplies the framework and userland.
 
-The normal image intentionally stays small and uses hosted mode for graphics.
-To stage the optional native Xorg + PySide6 profile, which adds hundreds of
-megabytes of Qt libraries, use:
+The normal image stays console-first and is useful on systems without a
+GUI profile. To stage the native Xorg + PySide6 profile, use:
 
 ```sh
-make rootfs-gui    # stages it in .build/pyrootfs
-make iso-gui       # builds using that larger rootfs
+make rootfs-gui    # clean Alpine GUI rootfs in .build/pyrootfs
+make iso-gui       # matching-kernel initramfs and hybrid ISO
+make test          # OpenRC/PythonOS guest self-test
+make run-iso       # graphical QEMU boot (use -vga std when invoking QEMU directly)
 ```
 
-The builder enables `pythonos-gui` automatically when `startx` is present.
-The `PYTHONOS_ROOTFS` environment variable can also point both scripts at a
+The GUI profile installs Alpine's `linux-lts`, then removes firmware and
+unneeded Qt/PySide6/developer payload while retaining the DRM, AGP/TTM,
+virtio, input and HID module families. The builder selects
+`.build/pyrootfs/boot/vmlinuz-lts` for this profile, preventing a kernel/module
+release mismatch. The builder enables `pythonos-gui` automatically when
+`startx` is present; OpenRC still leaves the tty1 and serial getty fallback
+available if Xorg or the desktop needs debugging. The
+`PYTHONOS_ROOTFS` environment variable can also point both scripts at a
 larger disk-backed staging directory.
 
 ### 2. Build the initramfs and ISO
@@ -134,8 +141,10 @@ The log is written to `release/boot-selftest.log`.
 make run
 ```
 
-The normal boot prints the PythonOS report, then OpenRC's getty presents a
-login prompt on the serial console and tty1. The root login shell is `pysh`.
+The normal console profile prints the PythonOS report, then OpenRC's getty
+presents a login prompt on the serial console and tty1. The root login shell
+is `pysh`. In a GUI-profile image, OpenRC also starts `pythonos-gui` and the
+shared Python desktop; the two gettys remain available as a fallback.
 
 To boot the ISO in a graphical QEMU window:
 
@@ -173,8 +182,8 @@ Double-check `/dev/sdX` before running this command.
 Debug shell:
 
 ```sh
-qemu-system-x86_64 -m 512 -nographic \
-  -kernel .cache-dl/vmlinuz-lts \
+qemu-system-x86_64 -m 768 -nographic \
+  -kernel .build/pyrootfs/boot/vmlinuz-lts \
   -initrd release/initramfs-lts \
   -append "console=ttyS0 rdinit=/bin/sh"
 ```
