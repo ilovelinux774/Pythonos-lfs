@@ -1,8 +1,9 @@
-"""PythonOS hosted desktop entry point."""
+"""Shared PythonOS desktop entry point for hosted and native sessions."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -63,17 +64,24 @@ QStatusBar { background: #101a2c; color: #8191aa; }
 
 
 class WelcomeWidget(QWidget):
-    def __init__(self, platform: HostPlatform, open_app):
+    def __init__(self, platform: HostPlatform, open_app, native: bool = False):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 25, 30, 25)
         hero = QLabel("Welcome to PythonOS")
         hero.setObjectName("hero")
         layout.addWidget(hero)
-        subtitle = QLabel(
-            "A modular desktop environment written in Python.\n"
-            "You are running the hosted version; the native Alpine version uses the same framework."
-        )
+        if native:
+            subtitle_text = (
+                "The native PythonOS desktop is running on Alpine Linux with OpenRC.\n"
+                "This session reuses the shared PythonOS applications and desktop framework."
+            )
+        else:
+            subtitle_text = (
+                "A modular desktop environment written in Python.\n"
+                "You are running the hosted version; the native Alpine version uses the same framework."
+            )
+        subtitle = QLabel(subtitle_text)
         subtitle.setObjectName("muted")
         layout.addWidget(subtitle)
         layout.addSpacing(18)
@@ -147,7 +155,7 @@ class FilesWidget(QWidget):
 
 
 class SettingsWidget(QWidget):
-    def __init__(self, window: "DesktopWindow"):
+    def __init__(self, window: "DesktopWindow", native: bool = False):
         super().__init__()
         layout = QVBoxLayout(self)
         title = QLabel("Desktop settings")
@@ -155,8 +163,12 @@ class SettingsWidget(QWidget):
         layout.addWidget(title)
         group = QGroupBox("Session")
         group_layout = QVBoxLayout(group)
-        group_layout.addWidget(QLabel("Hosted mode keeps its files in ~/.pythonos."))
-        group_layout.addWidget(QLabel("The native image will use Alpine + OpenRC and a Linux platform backend."))
+        if native:
+            group_layout.addWidget(QLabel("Native mode runs on Alpine Linux with OpenRC."))
+            group_layout.addWidget(QLabel("The shared PythonOS desktop is connected to the native userland."))
+        else:
+            group_layout.addWidget(QLabel("Hosted mode keeps its files in ~/.pythonos."))
+            group_layout.addWidget(QLabel("The native image uses Alpine + OpenRC and the same desktop framework."))
         fullscreen = QPushButton("Toggle fullscreen")
         fullscreen.clicked.connect(window.toggle_fullscreen)
         group_layout.addWidget(fullscreen)
@@ -165,19 +177,29 @@ class SettingsWidget(QWidget):
 
 
 class AboutWidget(QWidget):
-    def __init__(self, platform: HostPlatform):
+    def __init__(self, platform: HostPlatform, native: bool = False):
         super().__init__()
         layout = QVBoxLayout(self)
         title = QLabel(__pretty_name__)
         title.setObjectName("hero")
         layout.addWidget(title)
+        if native:
+            description = (
+                "PythonOS is running as a native Alpine Linux desktop.\n\n"
+                "OpenRC manages the Linux services and the Python framework\n"
+                "provides the shared desktop, applications and terminal.\n\n"
+            )
+        else:
+            description = (
+                "PythonOS is a desktop environment and a Linux distribution.\n\n"
+                "Hosted mode runs on an existing operating system, so development\n"
+                "does not require a virtual machine or a second computer. Native\n"
+                "mode boots Alpine Linux with OpenRC and reuses this Python UI.\n\n"
+            )
         text = QLabel(
-            "PythonOS is a desktop environment and a Linux distribution.\n\n"
-            "Hosted mode runs on an existing operating system, so development\n"
-            "does not require a virtual machine or a second computer. Native\n"
-            "mode will boot Alpine Linux with OpenRC and reuse this Python UI.\n\n"
-            f"Host: {platform.display_name()}\n"
-            f"Python: {platform.python}"
+            description
+            + f"Host: {platform.display_name()}\n"
+            + f"Python: {platform.python}"
         )
         text.setWordWrap(True)
         text.setObjectName("muted")
@@ -196,7 +218,9 @@ class DesktopWindow(QMainWindow):
     def __init__(self, platform: HostPlatform | None = None):
         super().__init__()
         self.platform = platform or HostPlatform()
-        self.setWindowTitle(f"PythonOS {__version__} · hosted desktop")
+        self.native = os.environ.get("PYTHONOS_NATIVE") == "1"
+        session = "native" if self.native else "hosted"
+        self.setWindowTitle(f"PythonOS {__version__} · {session} desktop")
         self.resize(1180, 760)
         self.setMinimumSize(900, 600)
         self.setObjectName("desktopRoot")
@@ -231,7 +255,7 @@ class DesktopWindow(QMainWindow):
         version.setObjectName("version")
         panel_layout.addWidget(version)
         panel_layout.addStretch()
-        mode = QLabel("HOSTED DESKTOP")
+        mode = QLabel("NATIVE DESKTOP" if self.native else "HOSTED DESKTOP")
         mode.setObjectName("version")
         panel_layout.addWidget(mode)
         layout.addWidget(panel)
@@ -349,7 +373,7 @@ class DesktopWindow(QMainWindow):
             self.activate_app(name)
             return
         if name == "welcome":
-            widget = WelcomeWidget(self.platform, self.open_app)
+            widget = WelcomeWidget(self.platform, self.open_app, native=self.native)
             title = "Welcome"
         elif name == "terminal":
             widget = TerminalWidget(self.platform, self.open_app)
@@ -358,10 +382,10 @@ class DesktopWindow(QMainWindow):
             widget = FilesWidget(self.platform)
             title = "Files"
         elif name == "settings":
-            widget = SettingsWidget(self)
+            widget = SettingsWidget(self, native=self.native)
             title = "Settings"
         elif name == "about":
-            widget = AboutWidget(self.platform)
+            widget = AboutWidget(self.platform, native=self.native)
             title = "About PythonOS"
         else:
             QMessageBox.warning(self, "Unknown application", name)
@@ -402,7 +426,7 @@ def _app_palette(app: QApplication) -> None:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Start the hosted PythonOS desktop")
+    parser = argparse.ArgumentParser(description="Start the PythonOS desktop")
     parser.add_argument("--fullscreen", action="store_true", help="start fullscreen")
     parser.add_argument("--smoke-test", action="store_true", help="create the desktop and exit")
     parser.add_argument("--version", action="version", version=f"PythonOS {__version__} ({__codename__})")

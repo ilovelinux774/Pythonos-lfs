@@ -54,6 +54,29 @@ app.quit()
         )
         self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
 
+    def test_native_session_uses_shared_desktop_labels(self):
+        self._require_qt()
+        code = """
+from PySide6.QtWidgets import QApplication, QLabel
+from pythonos.desktop.main import DesktopWindow
+app = QApplication([])
+window = DesktopWindow()
+assert window.native
+assert window.windowTitle().endswith(\"native desktop\")
+window.open_app(\"welcome\")
+labels = [label.text().lower() for label in window.windows[\"welcome\"].widget().findChildren(QLabel)]
+assert any(\"native alpine linux\" in label for label in labels)
+assert set(window.task_buttons) == {\"welcome\"}
+app.quit()
+"""
+        env = self._gui_env()
+        env["PYTHONOS_NATIVE"] = "1"
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=20, env=env,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+
     def test_terminal_cursor_blinks(self):
         self._require_qt()
         code = """

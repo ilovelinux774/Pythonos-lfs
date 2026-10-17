@@ -10,6 +10,7 @@ import sys
 if "/usr/lib" not in sys.path:
     sys.path.insert(0, "/usr/lib")
 os.environ.setdefault("PYTHONOS_HOME", "/root/.pythonos")
+os.environ.setdefault("PYTHONOS_NATIVE", "1")
 
 from pythonos.desktop.main import main  # noqa: E402
 
