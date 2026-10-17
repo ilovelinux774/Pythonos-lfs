@@ -1,7 +1,0 @@
-{
-  "name": "starfield",
-  "version": "0.9.0",
-  "description": "A tiny animated starfield for your terminal",
-  "entry": "starfield",
-  "author": "PythonOS"
-}

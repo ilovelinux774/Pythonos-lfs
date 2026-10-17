@@ -1,4 +1,0 @@
-# PythonOS runtime filesystems. OpenRC mounts /dev, /proc and /sys via
-# its sysinit services; localmount handles these tmpfs entries.
-tmpfs   /tmp   tmpfs   nodev,nosuid,mode=1777   0 0
-tmpfs   /run   tmpfs   nodev,nosuid,mode=755    0 0
