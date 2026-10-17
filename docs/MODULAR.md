@@ -7,11 +7,26 @@ PythonOS has two ways to run the same Python desktop framework.
 A developer or user can run PythonOS as an ordinary application on a current
 Linux, Windows or macOS computer:
 
+Python 3.9 or newer is supported.
+
+Linux/macOS:
+
 ```sh
 git clone https://github.com/ilovelinux774/Pythonos-lfs.git
 cd Pythonos-lfs
-python -m venv .venv
-. .venv/bin/activate                 # Windows: .venv\\Scripts\\activate
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+pythonos-desktop
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/ilovelinux774/Pythonos-lfs.git
+cd Pythonos-lfs
+py -3.9 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 pythonos-desktop
 ```

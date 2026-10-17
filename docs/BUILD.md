@@ -6,11 +6,31 @@ system path.
 
 ## Hosted desktop
 
+Python 3.9 or newer is supported.
+
+Linux/macOS:
+
 ```sh
-python -m venv .venv
-. .venv/bin/activate                 # Windows: .venv\\Scripts\\activate
+python3 -m venv .venv
+. .venv/bin/activate
 python -m pip install -r requirements.txt
 pythonos-desktop
+```
+
+Windows PowerShell:
+
+```powershell
+py -3.9 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+pythonos-desktop
+```
+
+Activation is optional on Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pythonos.desktop.main
 ```
 
 The requirements file installs PySide6-Essentials and the repository in

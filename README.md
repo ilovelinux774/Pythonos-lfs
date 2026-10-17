@@ -23,15 +23,33 @@ and applications users interact with are Python.
 
 ## Run the desktop now
 
-```sh
+Python 3.9 or newer is supported. On Windows PowerShell, run:
+
+```powershell
 git clone https://github.com/ilovelinux774/Pythonos-lfs.git
 cd Pythonos-lfs
 
-python -m venv .venv
-. .venv/bin/activate                 # Windows: .venv\\Scripts\\activate
+py -3.9 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 pythonos-desktop
+```
+
+If PowerShell blocks activation, either allow it for this terminal only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+Activation is optional; this is equivalent and works in every PowerShell
+session:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pythonos.desktop.main
 ```
 
 The first hosted desktop opens as a normal application window with:

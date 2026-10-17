@@ -11,7 +11,7 @@ image that uses OpenRC.
 ### Added
 
 - `requirements.txt` and `pyproject.toml` for a standard editable Python
-  install.
+  install (Python 3.9+).
 - `pythonos-desktop`, a PySide6-Essentials hosted desktop entry point.
 - PythonOS panel, application launcher, welcome screen, terminal, files,
   settings and about applications.
