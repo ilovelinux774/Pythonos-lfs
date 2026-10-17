@@ -1,0 +1,12 @@
+
+  PythonOS 0.1 "Constrictor" — a Linux distribution whose userland is Python.
+
+  The kernel is Linux. PID 1 is Python. So is the shell, every command
+  you are about to type, and the package manager.
+
+    help       list commands          pyfetch    system information
+    pytop      process monitor        pyedit     text editor
+    pkg        package manager        py         run Python code
+
+  Try:  py "import this"      pkg search      starfield
+

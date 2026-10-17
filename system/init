@@ -1,0 +1,12 @@
+#!/usr/bin/python3
+"""PythonOS PID 1 — the kernel execs this file first."""
+
+import sys
+
+sys.path.insert(0, "/usr/lib/pythonos")
+sys.path.insert(0, "/usr/lib")
+
+from pythonos import init_main
+
+if __name__ == "__main__":
+    sys.exit(init_main.main())

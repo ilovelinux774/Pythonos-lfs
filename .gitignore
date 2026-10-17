@@ -1,0 +1,17 @@
+# build artefacts
+release/
+.cache-dl/
+/tmp/pyrootfs/
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# editors / os
+.DS_Store
+*.swp
+*~

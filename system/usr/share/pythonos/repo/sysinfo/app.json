@@ -1,0 +1,7 @@
+{
+  "name": "sysinfo",
+  "version": "1.0.0",
+  "description": "Detailed system facts without the logo",
+  "entry": "sysinfo",
+  "author": "PythonOS"
+}
