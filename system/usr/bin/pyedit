@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+import sys
+
+sys.path.insert(0, "/usr/lib/pythonos")
+sys.path.insert(0, "/usr/lib")
+
+from pythonos.tools import pyedit
+
+if __name__ == "__main__":
+    sys.exit(pyedit.main())

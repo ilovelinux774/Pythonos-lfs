@@ -1,0 +1,12 @@
+# PythonOS uses Alpine's BusyBox init with OpenRC service management.
+
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+
+# PythonOS's shell is the login shell for both local and serial consoles.
+tty1::respawn:/sbin/getty -L 0 tty1 linux
+ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown

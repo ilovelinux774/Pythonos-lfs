@@ -1,0 +1,17 @@
+#!/sbin/openrc-run
+
+name="pythonos"
+description="PythonOS session and boot report"
+command="/usr/bin/python3"
+command_args="/usr/lib/pythonos/openrc_main.py"
+command_user="root:root"
+command_background="no"
+
+# OpenRC owns PID 1 and the low-level boot order. This service is the Python
+# layer above it: it prints the PythonOS report, runs the self-test when asked
+# for it, and will host the native graphical session in the next phase.
+depend()
+{
+    need devfs procfs sysfs
+    after localmount bootmisc hostname
+}

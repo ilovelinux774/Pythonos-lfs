@@ -1,0 +1,7 @@
+#!/bin/sh
+# PythonOS native boot entrypoint.
+#
+# Alpine's BusyBox init remains PID 1 and hands service management to
+# OpenRC. Keeping this compatibility wrapper lets older boot commands that
+# use rdinit=/init continue to work while the real init is /sbin/init.
+exec /sbin/init "$@"

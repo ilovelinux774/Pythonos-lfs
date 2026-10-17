@@ -1,0 +1,7 @@
+{
+  "name": "hello",
+  "version": "1.0.0",
+  "description": "The polite way to test a new operating system",
+  "entry": "hello",
+  "author": "PythonOS"
+}
