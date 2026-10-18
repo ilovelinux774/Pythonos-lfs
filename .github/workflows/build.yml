@@ -19,7 +19,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common libegl1 libxkbcommon0
+          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common libegl1
 
       - name: Install hosted desktop dependencies
         run: python3 -m pip install --no-cache-dir -r requirements.txt
@@ -72,3 +72,7 @@ jobs:
           name: hosted-desktop-proof
           path: docs/screenshots/hosted-desktop.png
           retention-days: 30
+
+      - name: Upload screenshots from this boot? (demo mode)
+        if: false   # demo capture needs a framebuffer; kept manual via `make shots`
+        run: true

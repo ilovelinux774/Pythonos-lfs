@@ -48,6 +48,22 @@ QT_QPA_PLATFORM=offscreen python -m pythonos.desktop.main --smoke-test
 make desktop-shot
 ```
 
+## Ready-made ISO for end users
+
+Contributors are not required to build the distribution just to run it.
+Download `pythonos-0.1.iso` from the
+[latest GitHub Release](https://github.com/ilovelinux774/Pythonos-lfs/releases/latest).
+It already contains Alpine, OpenRC, PythonOS, Xorg, PySide6, the matching
+kernel and the native desktop runtime.
+
+```sh
+qemu-system-x86_64 -m 768 -vga std -cdrom pythonos-0.1.iso
+```
+
+The workflow also publishes the same ISO as a downloadable artifact on every
+successful `main` build. The contributor build instructions below are only
+needed when changing or reproducing the image.
+
 ## Native Alpine image
 
 ### Requirements
