@@ -155,7 +155,7 @@ class FilesWidget(QWidget):
 
 
 class SettingsWidget(QWidget):
-    def __init__(self, window: "DesktopWindow", native: bool = False):
+    def __init__(self, native: bool = False):
         super().__init__()
         layout = QVBoxLayout(self)
         title = QLabel("Desktop settings")
@@ -169,9 +169,6 @@ class SettingsWidget(QWidget):
         else:
             group_layout.addWidget(QLabel("Hosted mode keeps its files in ~/.pythonos."))
             group_layout.addWidget(QLabel("The native image uses Alpine + OpenRC and the same desktop framework."))
-        fullscreen = QPushButton("Toggle fullscreen")
-        fullscreen.clicked.connect(window.toggle_fullscreen)
-        group_layout.addWidget(fullscreen)
         layout.addWidget(group)
         layout.addStretch()
 
@@ -316,7 +313,6 @@ class DesktopWindow(QMainWindow):
                             ("settings", "Settings"), ("about", "About")):
             menu.addAction(title, lambda n=name: self.open_app(n))
         menu.addSeparator()
-        menu.addAction("Toggle fullscreen", self.toggle_fullscreen)
         menu.addAction("Exit PythonOS", self.close)
         point = self.start_button.mapToGlobal(QPoint(0, -menu.sizeHint().height()))
         menu.exec(point)
@@ -382,7 +378,7 @@ class DesktopWindow(QMainWindow):
             widget = FilesWidget(self.platform)
             title = "Files"
         elif name == "settings":
-            widget = SettingsWidget(self, native=self.native)
+            widget = SettingsWidget(native=self.native)
             title = "Settings"
         elif name == "about":
             widget = AboutWidget(self.platform, native=self.native)
@@ -408,12 +404,6 @@ class DesktopWindow(QMainWindow):
     def _window_destroyed(self, name: str):
         self.windows.pop(name, None)
         self._remove_task_button(name)
-
-    def toggle_fullscreen(self):
-        if self.isFullScreen():
-            self.showNormal()
-        else:
-            self.showFullScreen()
 
 
 def _app_palette(app: QApplication) -> None:
