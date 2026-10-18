@@ -602,7 +602,7 @@ class Shell:
             print("  " + ansi.colorize(line, ansi.BOLD, ansi.CYAN, enabled=use_color))
         print()
         print("  " + ansi.bold(f"Welcome to {__pretty_name__}"))
-        print(f"  {ansi.dim('The shell, the userland and PID 1 are Python. Python ' + sys.version.split()[0] + '.')}")
+        print(f"  {ansi.dim('The shell and userland are Python; Alpine/BusyBox and OpenRC own PID 1. Python ' + sys.version.split()[0] + '.')}")
         print()
         print(f"  {ansi.green('help')}      list commands        "
               f"{ansi.green('pyfetch')}   system info")
