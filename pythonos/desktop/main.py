@@ -440,7 +440,17 @@ def main(argv=None) -> int:
     # Native Alpine boots without a window manager. The desktop shell must
     # own the entire X11 framebuffer; otherwise the 1180x760 hosted window
     # leaves black strips on VirtualBox's larger 1280x800 screen.
-    if window.native or args.fullscreen:
+    if window.native:
+        screen = app.primaryScreen()
+        if screen is not None:
+            # Set the geometry explicitly before the fullscreen request. This
+            # also works on X11 servers without a window manager, where a
+            # fullscreen state request alone may not resize the toplevel.
+            window.setGeometry(screen.geometry())
+        window.showFullScreen()
+        if screen is not None:
+            window.setGeometry(screen.geometry())
+    elif args.fullscreen:
         window.showFullScreen()
     else:
         window.show()
