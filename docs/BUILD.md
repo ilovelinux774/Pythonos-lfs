@@ -57,8 +57,13 @@ It already contains Alpine, OpenRC, PythonOS, Xorg, PySide6, the matching
 kernel and the native desktop runtime.
 
 ```sh
-qemu-system-x86_64 -m 768 -vga std -cdrom pythonos-0.1.iso
+qemu-system-x86_64 -m 768 -smp 1 -vga std -cdrom pythonos-0.1.iso
 ```
+
+VirtualBox users should allocate at least 768 MB RAM and 128 MB video memory,
+select the `VMSVGA` graphics controller, and disable 3D Acceleration for the
+first boot. The GUI profile keeps `vmwgfx` and `vboxvideo` kernel modules and
+installs Xorg VMware/VESA fallbacks in addition to the QEMU graphics path.
 
 The workflow also publishes the same ISO as a downloadable artifact on every
 successful `main` build. The contributor build instructions below are only

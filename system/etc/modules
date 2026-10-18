@@ -1,5 +1,10 @@
 # Generic native graphics/input modules for the Alpine GUI profile.
 # Missing modules are harmless in the console-only image.
+# QEMU's std VGA:
 bochs
+# QEMU/VirtualBox modern graphics controllers:
 virtio_gpu
+vmwgfx
+vboxvideo
+# DRM dependency umbrella:
 drm

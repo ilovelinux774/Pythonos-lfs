@@ -49,8 +49,8 @@ chroot "$ROOTFS" /sbin/apk add --no-cache python3 openrc
 if [ "${PYTHONOS_NATIVE_GUI:-0}" = "1" ]; then
     echo "==> installing optional native graphical profile"
     chroot "$ROOTFS" /sbin/apk add --no-cache \
-        py3-pyside6 xorg-server xinit xf86-video-fbdev xf86-input-libinput \
-        font-dejavu linux-lts
+        py3-pyside6 xorg-server xinit xf86-video-fbdev xf86-video-vmware \
+        xf86-video-vesa xf86-input-libinput font-dejavu linux-lts
 
     # The GUI profile uses the matching Alpine kernel modules for QEMU and
     # real hardware graphics/input. Firmware is intentionally removed from
@@ -61,7 +61,9 @@ if [ "${PYTHONOS_NATIVE_GUI:-0}" = "1" ]; then
     # particular, bochs-drm -> TTM -> AGP is a real dependency chain; pruning
     # only the DRM directories makes modprobe report unresolved agp_* symbols
     # and leaves Xorg with no screen. The input/HID and virtio families cover
-    # the generic native desktop and QEMU paths.
+    # QEMU, while vmwgfx/vboxvideo cover VirtualBox's VMSVGA and VBoxSVGA
+    # controllers. The Xorg VMware and VESA drivers provide fallbacks when
+    # the controller does not expose a usable modesetting device.
     chroot "$ROOTFS" /bin/sh -c '
         rm -rf /lib/firmware /boot/initramfs-lts /boot/System.map-* /boot/config-*
         rm -rf /usr/share/qt6 /usr/share/PySide6 /usr/share/mime

@@ -152,14 +152,21 @@ pythonos-0.1.iso
 Write it to a USB stick or boot it directly in QEMU:
 
 ```sh
-qemu-system-x86_64 -m 768 -vga std -cdrom pythonos-0.1.iso
+qemu-system-x86_64 -m 768 -smp 1 -vga std -cdrom pythonos-0.1.iso
 ```
+
+For VirtualBox, create an x86_64 VM with at least 768 MB RAM, 128 MB video
+memory, and the `VMSVGA` graphics controller. Disable 3D Acceleration for the
+most reliable first boot, then attach the ISO to the optical drive and start
+the VM. The image includes VirtualBox's `vmwgfx`/`vboxvideo` kernel paths plus
+Xorg VMware/VESA fallbacks.
 
 The ISO already contains the Alpine base, OpenRC, PythonOS, Xorg, PySide6,
 the matching kernel and the native desktop dependencies. The GitHub Actions
 build also publishes the ISO as a downloadable workflow artifact for every
 successful `main` build. Compilation is only needed by contributors who want
-to rebuild the distribution.
+to rebuild the distribution. The 27 MB `v0.1.0` image is the older
+console-only release; use the larger current release for the GUI.
 
 ## Build and test the native image
 
