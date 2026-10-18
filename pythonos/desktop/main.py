@@ -437,7 +437,10 @@ def main(argv=None) -> int:
     app.setApplicationVersion(__version__)
     _app_palette(app)
     window = DesktopWindow()
-    if args.fullscreen:
+    # Native Alpine boots without a window manager. The desktop shell must
+    # own the entire X11 framebuffer; otherwise the 1180x760 hosted window
+    # leaves black strips on VirtualBox's larger 1280x800 screen.
+    if window.native or args.fullscreen:
         window.showFullScreen()
     else:
         window.show()
