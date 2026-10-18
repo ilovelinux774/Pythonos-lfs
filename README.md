@@ -158,8 +158,9 @@ qemu-system-x86_64 -m 768 -smp 1 -vga std -cdrom pythonos-0.1.iso
 For VirtualBox, create an x86_64 VM with at least 768 MB RAM, 128 MB video
 memory, and the `VMSVGA` graphics controller. Disable 3D Acceleration for the
 most reliable first boot, then attach the ISO to the optical drive and start
-the VM. The image includes VirtualBox's `vmwgfx`/`vboxvideo` kernel paths plus
-Xorg VMware/VESA fallbacks.
+the VM. The image includes VirtualBox's `vmwgfx`/`vboxvideo` kernel paths,
+eudev/libinput mouse hotplug support, the Xorg vmmouse PS/2 fallback and
+Xorg VMware/VESA graphics fallbacks.
 
 The ISO already contains the Alpine base, OpenRC, PythonOS, Xorg, PySide6,
 the matching kernel and the native desktop dependencies. The GitHub Actions

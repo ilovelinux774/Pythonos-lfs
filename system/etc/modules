@@ -8,3 +8,13 @@ vmwgfx
 vboxvideo
 # DRM dependency umbrella:
 drm
+# VirtualBox/QEMU pointer paths:
+usbhid
+hid_generic
+evdev
+psmouse
+virtio_input
+# Legacy PS/2 controller stack used by VirtualBox's default mouse:
+i8042
+serio
+serio_raw

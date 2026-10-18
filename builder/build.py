@@ -106,9 +106,21 @@ def configure_openrc():
     if os.path.exists(os.path.join(ROOTFS, "usr/bin/startx")):
         default_services.append("pythonos-gui")
 
+    sysinit_services = ["devfs", "procfs", "sysfs"]
+    boot_services = ["hostname", "bootmisc", "localmount"]
+    # The GUI profile includes eudev so Xorg/libinput can discover hotplugged
+    # VirtualBox and USB mouse devices. Keep the console-only profile free of
+    # the extra daemon and only link services that are actually installed.
+    if os.path.exists(os.path.join(ROOTFS, "etc/init.d/udev")):
+        sysinit_services.append("udev")
+    if os.path.exists(os.path.join(ROOTFS, "etc/init.d/udev-trigger")):
+        boot_services.append("udev-trigger")
+    if os.path.exists(os.path.join(ROOTFS, "etc/init.d/udev-settle")):
+        boot_services.append("udev-settle")
+
     runlevels = {
-        "sysinit": ("devfs", "procfs", "sysfs"),
-        "boot": ("hostname", "bootmisc", "localmount"),
+        "sysinit": tuple(sysinit_services),
+        "boot": tuple(boot_services),
         "default": tuple(default_services),
         "shutdown": ("killprocs", "mount-ro"),
     }
