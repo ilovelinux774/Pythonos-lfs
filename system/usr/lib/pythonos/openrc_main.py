@@ -51,6 +51,9 @@ def print_report() -> None:
     print("  " + ansi.green("[  OK  ]") + " pysh is available on tty1 and ttyS0")
     print()
     print("  " + ansi.dim("Hosted mode: install requirements.txt and run pythonos-desktop"))
+    print()
+    print("  " + ansi.yellow("If the GUI is not visible, run:"))
+    print("    rc-service pythonos-gui start")
     print(flush=True)
 
 
