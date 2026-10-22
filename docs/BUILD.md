@@ -71,6 +71,31 @@ The workflow also publishes the same ISO as a downloadable artifact on every
 successful `main` build. The contributor build instructions below are only
 needed when changing or reproducing the image.
 
+## Native disk installer
+
+The GUI profile includes an **Install PythonOS** desktop application and the
+`pythonos-installer` tty command. Both expose wipe-and-install, manual
+partitioning, detected-OS dual-boot, and an advanced guide. Detection is
+read-only and disk writes require confirmation.
+
+Dual-boot mode preserves Windows/Linux partitions and uses a pre-created free
+Linux partition plus an EFI System Partition when booted in UEFI mode. It does
+not automatically shrink an existing OS in this first safe implementation.
+Automatic partition resizing remains unimplemented; prepare free space with a
+trusted partition editor before starting the installer.
+Review before writing:
+
+```sh
+sudo pythonos-installer disks
+sudo pythonos-installer detect
+sudo pythonos-installer plan --mode dualboot --root /dev/sda3 --esp /dev/sda1
+sudo pythonos-installer install --mode dualboot --root /dev/sda3 --esp /dev/sda1 --yes
+```
+
+For a blank disk, replace the final commands with
+`sudo pythonos-installer install --mode wipe --disk /dev/sda --yes`.
+Back up important data before changing partitions.
+
 ## Native Alpine image
 
 ### Requirements

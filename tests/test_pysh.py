@@ -19,11 +19,16 @@ PKG = os.path.join(LIB, "pythonos")
 # The repository also contains the hosted `pythonos` package. Keep the
 # native image package first for these shell tests; otherwise its imports of
 # pythonos.tui/pythonos.pysh would resolve to the hosted package.
-if ROOT in sys.path:
-    sys.path.remove(ROOT)
+# Running discovery from the repository puts the cwd in sys.path as `''`;
+# remove both forms so the native package wins over the hosted package.
+sys.path[:] = [entry for entry in sys.path if entry not in ("", ROOT)]
 for entry in (PKG, LIB):
     if entry not in sys.path:
         sys.path.insert(0, entry)
+# A preceding hosted-package test may have populated this namespace.
+for module_name in list(sys.modules):
+    if module_name == "pythonos" or module_name.startswith("pythonos."):
+        del sys.modules[module_name]
 
 from pysh.shell import Shell, expand_word, parse, tokenize  # noqa: E402
 

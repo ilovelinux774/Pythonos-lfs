@@ -64,6 +64,7 @@ EXECUTABLES = (
     "usr/bin/pytop",
     "usr/bin/pyedit",
     "usr/bin/pkg",
+    "usr/bin/pythonos-installer",
 )
 
 ALWAYS_MKDIR = (
@@ -148,6 +149,12 @@ def overlay_rootfs():
     hosted_desktop = os.path.join(BASE, "pythonos", "desktop")
     native_desktop = os.path.join(ROOTFS, "usr/lib/pythonos/desktop")
     copy_tree(hosted_desktop, native_desktop)
+
+    # The installer backend is shared by the hosted source tree and the
+    # native image. Keep it beside the native PythonOS package so both the Qt
+    # installer and the tty CLI use exactly the same safety checks.
+    installer_backend = os.path.join(BASE, "pythonos", "installer.py")
+    copy_tree(installer_backend, os.path.join(ROOTFS, "usr/lib/pythonos/installer.py"))
 
     for relative in EXECUTABLES:
         path = os.path.join(ROOTFS, relative)

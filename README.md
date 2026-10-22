@@ -169,6 +169,30 @@ successful `main` build. Compilation is only needed by contributors who want
 to rebuild the distribution. The 27 MB `v0.1.0` image is the older
 console-only release; use the larger current release for the GUI.
 
+## Install PythonOS to disk
+
+The native desktop includes an **Install PythonOS** application. The same
+workflow is available from a tty with `pythonos-installer`. It provides four
+paths: wipe and install, manual partitioning, install alongside a detected
+Windows/Linux system, and an advanced manual guide. `lsblk`, filesystem labels
+and read-only `/etc/os-release` inspection are used to detect existing systems.
+
+Wipe mode is destructive and requires a second confirmation. Dual-boot mode
+preserves detected systems and installs into a pre-created free Linux
+partition; it does not silently shrink or erase another operating system.
+Automatic partition resizing is not implemented: use the advanced guide or a
+trusted partition editor to create free space before selecting dual boot.
+Review a plan before writing:
+
+```sh
+sudo pythonos-installer detect
+sudo pythonos-installer plan --mode dualboot --root /dev/sda3 --esp /dev/sda1
+sudo pythonos-installer install --mode dualboot --root /dev/sda3 --esp /dev/sda1 --yes
+```
+
+For a blank disk, use `--mode wipe --disk /dev/sda --yes`. Back up important
+data first. The installer supports both UEFI and legacy BIOS bootloaders.
+
 ## Build and test the native image
 
 Requirements: `curl`, `cpio`, `xorriso`, `isolinux`, `syslinux-common`,

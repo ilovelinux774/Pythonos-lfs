@@ -52,7 +52,8 @@ if [ "${PYTHONOS_NATIVE_GUI:-0}" = "1" ]; then
         py3-pyside6 xorg-server xinit xf86-video-fbdev xf86-video-vmware \
         xf86-video-vesa xf86-input-libinput xf86-input-evdev \
         xf86-input-vmmouse eudev eudev-openrc udev-init-scripts-openrc \
-        font-dejavu linux-lts
+        font-dejavu linux-lts util-linux parted e2fsprogs dosfstools \
+        grub grub-bios grub-efi efibootmgr os-prober ntfs-3g mtools
 
     # The GUI profile uses the matching Alpine kernel modules for QEMU and
     # real hardware graphics/input. Firmware is intentionally removed from
@@ -74,7 +75,37 @@ if [ "${PYTHONOS_NATIVE_GUI:-0}" = "1" ]; then
         KVER=$(ls -1 /lib/modules 2>/dev/null | head -n 1)
         if [ -n "$KVER" ]; then
             MODULES=/lib/modules/$KVER/kernel
-            find "$MODULES" -type f ! \( -path "$MODULES/drivers/gpu/drm/*" -o -path "$MODULES/drivers/char/agp/*" -o -path "$MODULES/drivers/virtio/*" -o -path "$MODULES/drivers/input/*" -o -path "$MODULES/drivers/hid/*" \) -delete
+            find "$MODULES" -type f ! \( \
+                -path "$MODULES/drivers/gpu/drm/*" \
+                -o -path "$MODULES/drivers/char/agp/*" \
+                -o -path "$MODULES/drivers/virtio/*" \
+                -o -path "$MODULES/drivers/block/*" \
+                -o -path "$MODULES/drivers/ata/*" \
+                -o -path "$MODULES/drivers/nvme/*" \
+                -o -path "$MODULES/drivers/scsi/*" \
+                -o -path "$MODULES/drivers/md/*" \
+                -o -path "$MODULES/drivers/mmc/*" \
+                -o -path "$MODULES/drivers/input/*" \
+                -o -path "$MODULES/drivers/hid/*" \
+                -o -path "$MODULES/drivers/crypto/*" \
+                -o -path "$MODULES/arch/x86/crypto/*" \
+                -o -path "$MODULES/crypto/*" \
+                -o -path "$MODULES/lib/*" \
+                -o -path "$MODULES/fs/*" \
+                -o -path "$MODULES/fs/ext4/*" \
+                -o -path "$MODULES/fs/jbd2/*" \
+                -o -path "$MODULES/fs/mbcache*" \
+                -o -path "$MODULES/fs/fat/*" \
+                -o -path "$MODULES/fs/vfat/*" \
+                -o -path "$MODULES/fs/exfat/*" \
+                -o -path "$MODULES/fs/ntfs3/*" \
+                -o -path "$MODULES/fs/fuse/*" \
+                -o -path "$MODULES/fs/btrfs/*" \
+                -o -path "$MODULES/fs/xfs/*" \
+                -o -path "$MODULES/fs/isofs/*" \
+                -o -path "$MODULES/fs/udf/*" \
+                -o -path "$MODULES/fs/efivarfs/*" \
+            \) -delete
             find "$MODULES" -type d -empty -delete
             depmod -a "$KVER" 2>/dev/null || true
         fi
@@ -101,6 +132,59 @@ if [ "${PYTHONOS_NATIVE_GUI:-0}" = "1" ]; then
             /usr/lib/libbluray*.so* /usr/lib/libmpg123*.so* /usr/lib/librist*.so* \
             /usr/lib/libsrt*.so*
         rm -f /usr/lib/qt6/plugins/designer/libqwebengineview.so
+
+        # py3-pyside6 pulls optional QtQuick, WebEngine, multimedia and GTK
+        # payload. PythonOS uses only QtCore/QtGui/QtWidgets over XCB. Keep
+        # the XCB platform plugin and remove the optional bindings/plugins so
+        # the GUI ISO still boots comfortably with the documented 768 MiB
+        # QEMU/VirtualBox memory target.
+        rm -rf /usr/lib/qt6/plugins/assetimporters \
+            /usr/lib/qt6/plugins/designer \
+            /usr/lib/qt6/plugins/egldeviceintegrations \
+            /usr/lib/qt6/plugins/geometryloaders \
+            /usr/lib/qt6/plugins/multimedia \
+            /usr/lib/qt6/plugins/networkinformation \
+            /usr/lib/qt6/plugins/platforminputcontexts \
+            /usr/lib/qt6/plugins/platformthemes \
+            /usr/lib/qt6/plugins/position \
+            /usr/lib/qt6/plugins/printsupport \
+            /usr/lib/qt6/plugins/qmllint \
+            /usr/lib/qt6/plugins/qmltooling \
+            /usr/lib/qt6/plugins/renderers \
+            /usr/lib/qt6/plugins/renderplugins \
+            /usr/lib/qt6/plugins/sceneparsers \
+            /usr/lib/qt6/plugins/scxmldatamodel \
+            /usr/lib/qt6/plugins/sensors \
+            /usr/lib/qt6/plugins/texttospeech \
+            /usr/lib/qt6/plugins/tls \
+            /usr/lib/qt6/plugins/wayland-decoration-client \
+            /usr/lib/qt6/plugins/wayland-graphics-integration-client \
+            /usr/lib/qt6/plugins/wayland-graphics-integration-server \
+            /usr/lib/qt6/plugins/wayland-shell-integration
+        rm -f /usr/lib/qt6/plugins/platforms/libqeglfs.so \
+            /usr/lib/qt6/plugins/platforms/libqwayland-egl.so \
+            /usr/lib/qt6/plugins/platforms/libqwayland-generic.so
+        rm -rf /usr/lib/qt6/plugins/imageformats
+        rm -f /usr/lib/python3.12/site-packages/PySide6/*.pyi
+        rm -f /usr/share/misc/magic.mgc
+        rm -f /usr/lib/libgtk-3.so* /usr/lib/libgdk-3.so* \
+            /usr/lib/libgdk_pixbuf-2.0.so* /usr/lib/libatk-1.0.so* \
+            /usr/lib/libatk-bridge-2.0.so* /usr/lib/libcairo*.so* \
+            /usr/lib/libpango*.so*
+        rm -f /usr/lib/libflite*.so* /usr/lib/libassimp*.so* \
+            /usr/lib/libOpenEXR*.so* /usr/lib/libImath*.so* \
+            /usr/lib/libimath*.so* /usr/lib/libjxl*.so* \
+            /usr/lib/libdav1d*.so* /usr/lib/librav1e*.so*
+        rm -f /usr/lib/libgio-2.0.so*
+        rm -rf /usr/lib/girepository-1.0 /usr/lib/pulseaudio \
+            /usr/share/gtk-3.0 /usr/share/icons \
+            /usr/share/themes /usr/share/fonts/misc /usr/share/fonts/encodings
+        rm -rf /usr/lib/python3.12/ensurepip \
+            /usr/lib/python3.12/lib2to3 \
+            /usr/lib/python3.12/pydoc_data \
+            /usr/lib/python3.12/turtle.py \
+            /usr/lib/python3.12/turtledemo \
+            /usr/lib/python3.12/venv
     '
 else
     echo "==> native graphical profile disabled (use PYTHONOS_NATIVE_GUI=1)"

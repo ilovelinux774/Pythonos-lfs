@@ -54,6 +54,7 @@ def print_report() -> None:
     print()
     print("  " + ansi.yellow("If the GUI is not visible, run:"))
     print("    rc-service pythonos-gui start")
+    print("  " + ansi.dim("TTY installer fallback: pythonos-installer guide"))
     print(flush=True)
 
 

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Safe PythonOS native disk installer. Detection and planning are read-only;
+# disk writes require explicit confirmation in the CLI or GUI.
+export PYTHONPATH="/usr/lib:${PYTHONPATH:-}"
+exec /usr/bin/python3 -m pythonos.installer "$@"

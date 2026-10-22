@@ -94,6 +94,7 @@ class WelcomeWidget(QWidget):
             ("▤  Files", "Explore your private PythonOS files", "files"),
             ("⚙  Settings", "Configure the desktop", "settings"),
             ("ⓘ  About", "Learn how the modular system works", "about"),
+            ("▣  Install PythonOS", "Install safely from the desktop or use the tty fallback", "installer"),
         ]
         for index, (title, description, name) in enumerate(entries):
             box = QGroupBox(title)
@@ -310,9 +311,11 @@ class DesktopWindow(QMainWindow):
         menu.addAction("Open Welcome", lambda: self.open_app("welcome"))
         menu.addSeparator()
         for name, title in (("terminal", "Terminal"), ("files", "Files"),
-                            ("settings", "Settings"), ("about", "About")):
+                            ("settings", "Settings"), ("about", "About"),
+                            ("installer", "Install PythonOS")):
             menu.addAction(title, lambda n=name: self.open_app(n))
         menu.addSeparator()
+        menu.addAction("Toggle fullscreen", self.toggle_fullscreen)
         menu.addAction("Exit PythonOS", self.close)
         point = self.start_button.mapToGlobal(QPoint(0, -menu.sizeHint().height()))
         menu.exec(point)
@@ -371,6 +374,10 @@ class DesktopWindow(QMainWindow):
         if name == "welcome":
             widget = WelcomeWidget(self.platform, self.open_app, native=self.native)
             title = "Welcome"
+        elif name == "installer":
+            from .installer import InstallerWidget
+            widget = InstallerWidget()
+            title = "Install PythonOS"
         elif name == "terminal":
             widget = TerminalWidget(self.platform, self.open_app)
             title = "PythonOS Terminal"
@@ -404,6 +411,12 @@ class DesktopWindow(QMainWindow):
     def _window_destroyed(self, name: str):
         self.windows.pop(name, None)
         self._remove_task_button(name)
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
 
 
 def _app_palette(app: QApplication) -> None:

@@ -11,5 +11,6 @@
   Hosted desktop: install requirements.txt, then run pythonos-desktop.
   If the native GUI is not visible, run:
     rc-service pythonos-gui start
+  Disk installer fallback: run `pythonos-installer guide` from this tty.
   Try:  py "import this"      pkg search      starfield
 
