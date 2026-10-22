@@ -193,6 +193,14 @@ sudo pythonos-installer install --mode dualboot --root /dev/sda3 --esp /dev/sda1
 For a blank disk, use `--mode wipe --disk /dev/sda --yes`. Back up important
 data first. The installer supports both UEFI and legacy BIOS bootloaders.
 
+Installed systems use a small storage-only initramfs and then switch to the
+persistent root partition; they do not boot the large live desktop initramfs.
+The GRUB menu includes `PythonOS (initramfs emergency shell)`. You can also
+add `pythonos.debug=1` to a normal entry. If root discovery, mounting, or
+`switch_root` fails, the same BusyBox shell opens automatically. Type `exit`
+to retry boot. The recovery shell does not format or repair a disk
+automatically.
+
 ## Build and test the native image
 
 Requirements: `curl`, `cpio`, `xorriso`, `isolinux`, `syslinux-common`,
@@ -200,8 +208,9 @@ Requirements: `curl`, `cpio`, `xorriso`, `isolinux`, `syslinux-common`,
 
 ```sh
 make rootfs     # download Alpine minirootfs + kernel, install Python/OpenRC
-make iso        # overlay PythonOS, pack initramfs and build hybrid ISO
-make test       # boot the image in QEMU and run the guest self-test
+make iso        # overlay PythonOS, pack live + installed initramfs and build ISO
+make test       # boot the live image in QEMU and run the guest self-test
+make test-installed # boot a disposable installed root and test switch_root
 make run        # boot it interactively
 
 # Native graphical profile: matching Alpine LTS kernel + Xorg + PySide6
@@ -214,9 +223,10 @@ make run-iso              # graphical QEMU boot; console getty remains available
 The produced image is in `release/`:
 
 - `release/pythonos-0.1.iso` — bootable hybrid ISO
-- `release/initramfs-lts` — Alpine + OpenRC + PythonOS filesystem
+- `release/initramfs-lts` — live Alpine + OpenRC + PythonOS filesystem
+- `release/initramfs-installed` — small installed-system storage/root-mount initramfs
 
-The test boots the real initramfs with OpenRC and verifies:
+The live-image test boots the real initramfs with OpenRC and verifies:
 
 ```text
 SELFTEST PASSED — 22 passed, 0 failed

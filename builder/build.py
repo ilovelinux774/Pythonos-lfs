@@ -4,8 +4,9 @@
 Takes the prepared Alpine minirootfs + the PythonOS system tree and
 produces:
 
-    release/initramfs-lts     the PythonOS root filesystem (cpio.gz)
-    release/pythonos-0.1.iso  a bootable hybrid ISO
+    release/initramfs-lts          the live PythonOS root filesystem (cpio.gz)
+    release/initramfs-installed    the small disk-root initramfs
+    release/pythonos-0.1.iso       a bootable hybrid ISO
 
 Usage:
     python3 builder/build.py              # full build
@@ -222,12 +223,185 @@ def overlay_rootfs():
         fh.write("PythonOS 0.1 Constrictor · Alpine · OpenRC\n")
 
 
+PYTHONOS_INITRAMFS_PREFIX = r'''#!/bin/sh
+# PythonOS additions to Alpine's mkinitfs initramfs-init.
+#
+# The normal boot path below is kept from Alpine so root discovery, UUIDs,
+# storage modules and switch_root stay compatible with the kernel package.
+# This prefix adds an explicit recovery shell before that path starts.
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PS1='[pythonos-initramfs] # '
+
+pythonos_cmdline_has()
+{
+    [ -r /proc/cmdline ] || {
+        mkdir -p /proc
+        mount -t proc -o nosuid,nodev,noexec proc /proc 2>/dev/null || true
+    }
+    for pythonos_arg in $(cat /proc/cmdline 2>/dev/null); do
+        [ "$pythonos_arg" = "$1" ] && return 0
+    done
+    return 1
+}
+
+pythonos_recovery_mounts()
+{
+    mkdir -p /dev /dev/pts /proc /sys /run /tmp /newroot
+    mount -t devtmpfs -o nosuid,mode=0755 devtmpfs /dev 2>/dev/null || true
+    mount -t proc -o nosuid,nodev,noexec proc /proc 2>/dev/null || true
+    mount -t sysfs -o nosuid,nodev,noexec sysfs /sys 2>/dev/null || true
+    mount -t devpts -o nosuid,noexec,gid=5,mode=0620 devpts /dev/pts 2>/dev/null || true
+    mount -t tmpfs -o nosuid,nodev,mode=0755 tmpfs /run 2>/dev/null || true
+    mdev -s 2>/dev/null || true
+}
+
+pythonos_debug_shell()
+{
+    pythonos_recovery_mounts
+    echo
+    echo "PythonOS initramfs emergency shell"
+    echo "The normal boot will continue when you type 'exit'."
+    echo "Useful commands: dmesg, ls /dev, blkid, lsblk, modprobe, mount, fsck"
+    echo "The installed root is not modified automatically."
+    echo
+    /bin/busybox sh
+    # Return control to Alpine's normal init script with its expected clean
+    # mount namespace. User-created mounts elsewhere are left untouched.
+    umount -l /dev/pts /run /sys /proc /dev 2>/dev/null || true
+}
+
+if pythonos_cmdline_has pythonos.debug=1 || pythonos_cmdline_has pythonos.emergency=1; then
+    pythonos_debug_shell
+fi
+'''
+
+
+def build_installed_initramfs():
+    """Build the small disk-root initramfs used after installation.
+
+    The live image is intentionally a complete PythonOS root filesystem. An
+    installed machine must not boot that image as its root, so use Alpine's
+    mkinitfs to collect only the early-boot tools, storage/filesystem module
+    families, and Alpine's proven UUID mount + switch_root implementation.
+    """
+    os.makedirs(RELEASE, exist_ok=True)
+    modules_dir = os.path.join(ROOTFS, "lib", "modules")
+    versions = sorted(
+        name for name in os.listdir(modules_dir) if os.path.isdir(os.path.join(modules_dir, name))
+    ) if os.path.isdir(modules_dir) else []
+    mkinitfs = os.path.join(ROOTFS, "sbin", "mkinitfs")
+    default_init = os.path.join(ROOTFS, "usr", "share", "mkinitfs", "initramfs-init")
+    out = os.path.join(RELEASE, "initramfs-installed")
+    generated_inside = "/tmp/pythonos-initramfs-installed"
+
+    if not os.path.isfile(mkinitfs) or not os.path.isfile(default_init):
+        raise RuntimeError(
+            "Cannot build the installed initramfs: mkinitfs is missing from the staged rootfs"
+        )
+
+    # The GUI profile has a matching linux-lts module tree. The small console
+    # profile deliberately has no kernel package, so ask mkinitfs for a
+    # no-module image there instead of silently reusing the large live image.
+    # The console profile continues to use Alpine's netboot kernel, whose
+    # common storage/filesystem drivers are built in or supplied by its normal
+    # boot path; the authoritative installed image is the GUI profile.
+    version = versions[0] if versions else None
+    custom_init = os.path.join(ROOTFS, "tmp", "pythonos-initramfs-init")
+    config = os.path.join(ROOTFS, "tmp", "pythonos-mkinitfs.conf")
+    recovery_feature = os.path.join(
+        ROOTFS, "etc", "mkinitfs", "features.d", "pythonos-recovery.files"
+    )
+    switch_root_path = os.path.join(ROOTFS, "sbin", "switch_root")
+    switch_root_backup = os.path.join(ROOTFS, "tmp", "pythonos-switch-root-real")
+    switch_root_replaced = False
+    switch_root_had_original = os.path.lexists(switch_root_path)
+    os.makedirs(os.path.dirname(custom_init), exist_ok=True)
+    os.makedirs(os.path.dirname(recovery_feature), exist_ok=True)
+    # Alpine's initramfs-init uses the BusyBox switch_root applet's -c
+    # console option. util-linux also ships a different switch_root binary;
+    # temporarily expose the expected applet at the path used in the image.
+    if switch_root_had_original:
+        os.rename(switch_root_path, switch_root_backup)
+    os.symlink("/bin/busybox", switch_root_path)
+    switch_root_replaced = True
+    with open(custom_init, "w", encoding="utf-8") as fh:
+        fh.write(PYTHONOS_INITRAMFS_PREFIX)
+        fh.write("\n")
+        with open(default_init, "r", encoding="utf-8") as source:
+            fh.write(source.read())
+    os.chmod(custom_init, 0o755)
+    with open(recovery_feature, "w", encoding="utf-8") as fh:
+        # Alpine's base feature intentionally contains only the files needed
+        # for its normal path. The debug shell should be useful, so add the
+        # BusyBox applet links plus safe inspection/mount/fsck utilities.
+        fh.write(
+            "\n".join([
+                "/bin/*",
+                "/usr/bin/awk",
+                "/usr/bin/readlink",
+                "/usr/bin/sort",
+                "/usr/bin/which",
+                "/sbin/blkid",
+                "/sbin/e2fsck",
+                "/sbin/findfs",
+                "/sbin/fsck",
+                "/sbin/fsck.ext2",
+                "/sbin/fsck.ext3",
+                "/sbin/fsck.ext4",
+                "/sbin/mdev",
+                "/sbin/nlplug-findfs",
+                "/sbin/switch_root",
+                "",
+            ])
+        )
+    with open(config, "w", encoding="utf-8") as fh:
+        fh.write(
+            'features="base ata btrfs ext2 ext3 ext4 f2fs mmc nvme scsi usb virtio xfs pythonos-recovery"\n'
+        )
+
+    try:
+        mkinitfs_command = [
+            "chroot", ROOTFS, "/sbin/mkinitfs",
+            "-c", "/tmp/pythonos-mkinitfs.conf",
+            "-i", "/tmp/pythonos-initramfs-init",
+            "-o", generated_inside,
+        ]
+        if version:
+            mkinitfs_command.append(version)
+        else:
+            mkinitfs_command.insert(3, "-n")
+        run(mkinitfs_command)
+        shutil.copy2(os.path.join(ROOTFS, generated_inside.lstrip("/")), out)
+        os.chmod(out, 0o644)
+    finally:
+        for path in (
+            custom_init,
+            config,
+            recovery_feature,
+            os.path.join(ROOTFS, generated_inside.lstrip("/")),
+        ):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+        if switch_root_replaced:
+            try:
+                os.unlink(switch_root_path)
+            except FileNotFoundError:
+                pass
+            if switch_root_had_original:
+                os.rename(switch_root_backup, switch_root_path)
+    return out
+
+
 def build_initramfs():
     os.makedirs(RELEASE, exist_ok=True)
     out = os.path.join(RELEASE, "initramfs-lts")
     cmd = (f"cd {ROOTFS} && find . "
            f"-path './boot/vmlinuz-lts' -prune -o "
            f"-path './boot/initramfs-lts' -prune -o "
+           f"-path './boot/initramfs-installed' -prune -o "
            f"-path './boot/System.map-*' -prune -o "
            f"-path './boot/config-*' -prune -o -print0 | "
            f"LC_ALL=C sort -z | cpio --null -o -H newc 2>/dev/null | "
@@ -247,11 +421,13 @@ def kernel_source():
     return staged if os.path.isfile(staged) else KERNEL_SRC
 
 
-def build_iso(initramfs):
+def build_iso(initramfs, installed_initramfs):
     kernel = kernel_source()
     if not os.path.exists(kernel):
         sys.exit(f"error: kernel missing at {kernel}\n"
                  f"       run builder/prepare_rootfs.sh first (it downloads it)")
+    if not os.path.exists(installed_initramfs):
+        sys.exit(f"error: installed initramfs missing at {installed_initramfs}")
     step("Assembling ISO tree")
     if os.path.isdir(ISO_STAGE):
         shutil.rmtree(ISO_STAGE)
@@ -262,6 +438,10 @@ def build_iso(initramfs):
 
     shutil.copy2(kernel, os.path.join(boot_dir, "vmlinuz-lts"))
     shutil.copy2(initramfs, os.path.join(boot_dir, "initramfs-lts"))
+    # The live initramfs is deliberately not used by a disk installation.
+    # Ship the small storage/root-mount image as installer input only; it is
+    # copied to the target /boot by pythonos-installer.
+    shutil.copy2(installed_initramfs, os.path.join(boot_dir, "initramfs-installed"))
     shutil.copy2(find_syslinux("isolinux.bin"), os.path.join(isolinux_dir, "isolinux.bin"))
     shutil.copy2(find_syslinux("ldlinux.c32"), os.path.join(isolinux_dir, "ldlinux.c32"))
     isohdpfx = find_syslinux("isohdpfx.bin")
@@ -367,14 +547,22 @@ def main():
     overlay_rootfs()
 
     initramfs = None
+    installed_initramfs = None
     if not args.no_initramfs:
-        step("Packing initramfs")
+        step("Packing live initramfs")
+        installed_initramfs = build_installed_initramfs()
         initramfs = build_initramfs()
         print(f"    {initramfs}  ({human(initramfs)})")
+        print(f"    {installed_initramfs}  ({human(installed_initramfs)})")
+    elif not args.no_iso:
+        initramfs = os.path.join(RELEASE, "initramfs-lts")
+        installed_initramfs = os.path.join(RELEASE, "initramfs-installed")
+        if not os.path.exists(initramfs) or not os.path.exists(installed_initramfs):
+            sys.exit("error: --no-initramfs requires existing live and installed initramfs files")
 
     iso = None
     if not args.no_iso and initramfs:
-        iso = build_iso(initramfs)
+        iso = build_iso(initramfs, installed_initramfs)
 
     hand_back_ownership()
 

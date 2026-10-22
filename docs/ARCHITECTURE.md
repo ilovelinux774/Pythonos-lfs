@@ -49,6 +49,21 @@ OpenRC deliberately owns PID 1 service management. Python is the framework,
 service layer and userland above it. Reusing Alpine avoids spending the
 project on a replacement init system.
 
+### Live versus installed boot
+
+The ISO boots the full `release/initramfs-lts` because the live desktop,
+installer and recovery tools all run from RAM. A disk installation instead
+uses `release/initramfs-installed`, generated with Alpine's `mkinitfs`. That
+image contains storage/filesystem support, BusyBox diagnostics, root UUID
+lookup, and `switch_root`; it does not contain PythonOS, Qt, Xorg, or the live
+package tree. After `switch_root`, the installed root partition starts the
+normal kernel/OpenRC chain above.
+
+The installed initramfs enters a BusyBox shell automatically if it cannot
+find/mount the root or complete `switch_root`. `pythonos.debug=1` and the
+GRUB emergency entry enter that shell deliberately; typing `exit` returns to
+the normal Alpine initramfs flow.
+
 ## Layers
 
 ### Native C and kernel layer
@@ -147,12 +162,17 @@ make iso
   copy system/ into /tmp/pyrootfs
   configure OpenRC runlevel links
   install PythonOS interpreter wrapper
-  cpio + gzip → release/initramfs-lts
+  mkinitfs + Alpine initramfs-init → release/initramfs-installed
+  cpio + gzip → release/initramfs-lts (live desktop)
   xorriso + isolinux → release/pythonos-0.1.iso
 
 make test
-  QEMU → BusyBox init → OpenRC → pythonos service
+  QEMU → live BusyBox init → OpenRC → pythonos service
   selftest --guest → reboot(2)
+
+make test-installed
+  QEMU → installed initramfs → root UUID mount → switch_root
+  OpenRC → pythonos service → selftest --guest → reboot(2)
 ```
 
 The interpreter wrapper defaults `PYTHONHASHSEED=0` because an initramfs can

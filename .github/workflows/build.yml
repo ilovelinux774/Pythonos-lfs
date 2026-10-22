@@ -23,7 +23,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common libegl1 libxkbcommon0
+          sudo apt-get install -y -qq qemu-system-x86 cpio xorriso curl gzip isolinux syslinux-common e2fsprogs util-linux libegl1 libxkbcommon0
 
       - name: Install hosted desktop dependencies
         run: python3 -m pip install --no-cache-dir -r requirements.txt
@@ -46,19 +46,29 @@ jobs:
       - name: Boot-test the ready-made ISO in QEMU
         run: PYTHONOS_QEMU_MEMORY=768 make test
 
-      - name: Show the self-test report
+      - name: Boot-test the installed root and recovery initramfs
+        run: PYTHONOS_QEMU_MEMORY=768 make test-installed
+
+      - name: Show the self-test reports
         if: always()
         run: |
-          if [ -f release/boot-selftest.log ]; then
-            grep -aE "PASS|FAIL|SELFTEST|Traceback|panic" release/boot-selftest.log | tail -n 40
-          fi
+          for log in release/boot-selftest.log release/installed-boot-selftest.log release/installed-recovery-selftest.log release/installed-automatic-recovery.log; do
+            if [ -f "$log" ]; then
+              echo "===== $log ====="
+              grep -aE "PASS|FAIL|SELFTEST|emergency|Traceback|panic" "$log" | tail -n 40 || true
+            fi
+          done
 
-      - name: Upload boot log
+      - name: Upload boot logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: boot-selftest-log
-          path: release/boot-selftest.log
+          name: boot-selftest-logs
+          path: |
+            release/boot-selftest.log
+            release/installed-boot-selftest.log
+            release/installed-recovery-selftest.log
+            release/installed-automatic-recovery.log
           if-no-files-found: warn
 
       - name: Upload ready-made ISO
@@ -69,12 +79,14 @@ jobs:
           path: release/pythonos-0.1.iso
           retention-days: 30
 
-      - name: Upload initramfs package
+      - name: Upload initramfs packages
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: pythonos-0.1-gui-initramfs
-          path: release/initramfs-lts
+          path: |
+            release/initramfs-lts
+            release/initramfs-installed
           retention-days: 30
 
       - name: Upload hosted desktop proof
@@ -93,3 +105,4 @@ jobs:
           files: |
             release/pythonos-0.1.iso
             release/initramfs-lts
+            release/initramfs-installed

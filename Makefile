@@ -4,7 +4,8 @@
 #   make rootfs-gui      optional native Xorg + PySide6 rootfs
 #   make desktop-install install hosted desktop dependencies
 #   make desktop         run the hosted PythonOS desktop
-#   make test            boot the native Alpine image in QEMU
+#   make test            boot the live native Alpine image in QEMU
+#   make test-installed  boot a disposable installed root and test recovery
 #   make unittest        host-side tests (no root, GUI optional)
 
 SHELL := /bin/bash
@@ -14,7 +15,7 @@ KERNEL := $(if $(wildcard .build/pyrootfs/boot/vmlinuz-lts),.build/pyrootfs/boot
 INITRAMFS := release/initramfs-lts
 ISO := release/pythonos-0.1.iso
 
-.PHONY: all rootfs rootfs-gui iso iso-gui initramfs test run run-iso run-serial shots \
+.PHONY: all rootfs rootfs-gui iso iso-gui initramfs test test-installed run run-iso run-serial shots \
         desktop-install desktop desktop-shot unittest clean distclean
 
 all: iso
@@ -47,6 +48,11 @@ desktop-shot:
 test:
 	@test -f $(INITRAMFS) || { echo "run 'make iso' first"; exit 1; }
 	bash builder/test_boot.sh 300
+
+test-installed:
+	@test -f release/initramfs-installed || { echo "run 'make iso-gui' first"; exit 1; }
+	@test -d .build/pyrootfs || { echo "run 'make rootfs-gui' first"; exit 1; }
+	sudo builder/test_installed_boot.sh 300
 
 run:
 	@test -f $(ISO) || { echo "run 'make iso' first"; exit 1; }

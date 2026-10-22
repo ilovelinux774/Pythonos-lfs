@@ -12,5 +12,7 @@
   If the native GUI is not visible, run:
     rc-service pythonos-gui start
   Disk installer fallback: run `pythonos-installer guide` from this tty.
+  Installed boot recovery: choose the GRUB initramfs emergency entry or add
+    `pythonos.debug=1` to the kernel command line.
   Try:  py "import this"      pkg search      starfield
 

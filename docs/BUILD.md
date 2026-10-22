@@ -118,9 +118,10 @@ sudo builder/prepare_rootfs.sh
 ```
 
 This downloads Alpine's x86_64 minirootfs and LTS kernel into `.cache-dl/`,
-unpacks the rootfs to `/tmp/pyrootfs`, and installs `python3 openrc` with
-Alpine's `apk`. Alpine supplies the low-level C plumbing and service manager;
-PythonOS supplies the framework and userland.
+unpacks the rootfs to `/tmp/pyrootfs`, and installs `python3 openrc mkinitfs`
+with Alpine's `apk`. Alpine supplies the low-level C plumbing, service
+manager, and installed-system initramfs generator; PythonOS supplies the
+framework and userland.
 
 The normal image stays console-first and is useful on systems without a
 GUI profile. To stage the native Xorg + PySide6 profile, use:
@@ -149,8 +150,12 @@ sudo python3 builder/build.py
 ```
 
 The builder overlays `system/`, installs the early-boot Python interpreter
-wrapper, creates OpenRC runlevel links, packs the initramfs and assembles a
-hybrid ISO with isolinux.
+wrapper, creates OpenRC runlevel links, builds two initramfs images, and
+assembles a hybrid ISO with isolinux. `release/initramfs-lts` is the complete
+live desktop image. `release/initramfs-installed` is generated with Alpine's
+`mkinitfs` and contains only early storage/filesystem support, root UUID
+mounting, `switch_root`, and the recovery shell. The ISO carries both; the
+disk installer copies only the installed-system image into `/boot`.
 
 Useful flags:
 
@@ -173,9 +178,12 @@ The harness boots with:
 console=ttyS0 rdinit=/init pythonos.selftest=1
 ```
 
-`/init` is a compatibility shell wrapper that execs Alpine's `/sbin/init`.
-BusyBox init starts OpenRC; OpenRC starts the `pythonos` service; the service
-runs the self-test and powers off. The test expects:
+`/init` in the live image is a compatibility shell wrapper that execs Alpine's
+`/sbin/init`. BusyBox init starts OpenRC; OpenRC starts the `pythonos` service;
+the service runs the self-test and powers off. The installed-root regression
+uses `release/initramfs-installed`, mounts a disposable ext4 root by UUID,
+performs `switch_root`, and then expects the same service self-test. The live
+test expects:
 
 ```text
 SELFTEST PASSED — 22 passed, 0 failed
@@ -199,6 +207,27 @@ To boot the ISO in a graphical QEMU window:
 ```sh
 make run-iso
 ```
+
+### Installed-system recovery shell
+
+The installed initramfs opens a BusyBox emergency shell automatically when it
+cannot find or mount the configured root filesystem, or when `switch_root`
+fails. To enter it deliberately, choose the GRUB entry
+`PythonOS (initramfs emergency shell)`, or append `pythonos.debug=1` to a
+normal entry. `pythonos.emergency=1` is also accepted. The shell is available
+on the VGA and serial consoles and includes `dmesg`, `lsblk`, `blkid`,
+`modprobe`, `mount`, and `fsck`. Type `exit` to let the normal Alpine boot
+script retry. No formatting or filesystem repair is performed automatically.
+
+The disposable regression test can be run with:
+
+```sh
+make test-installed
+```
+
+It creates a temporary ext4 image, copies the staged root into it, boots with
+the installed initramfs, and requires the post-`switch_root` PythonOS self-test
+marker before passing.
 
 ### 5. Capture proof screens
 

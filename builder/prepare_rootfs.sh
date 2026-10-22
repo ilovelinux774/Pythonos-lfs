@@ -41,7 +41,7 @@ cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf"
 echo "==> installing Python and OpenRC into the rootfs (apk)"
 # Alpine gives us the kernel-facing C plumbing and a production service
 # manager. PythonOS owns the framework and desktop above it.
-chroot "$ROOTFS" /sbin/apk add --no-cache python3 openrc
+chroot "$ROOTFS" /sbin/apk add --no-cache python3 openrc mkinitfs
 
 # The hosted desktop is the portable graphical development target. A native
 # Xorg/PySide6 image is an optional profile because Alpine's complete Qt

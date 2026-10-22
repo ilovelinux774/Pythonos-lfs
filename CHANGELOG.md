@@ -21,6 +21,10 @@ image that uses OpenRC.
 - Native `pythonos` OpenRC service and Alpine/BusyBox gettys on tty1 and
   ttyS0.
 - Native guest self-test now verifies OpenRC PID 1 and the default runlevel.
+- Separate installed-system initramfs generated with Alpine `mkinitfs`, with
+  root UUID mounting, `switch_root`, and an automatic/manual emergency shell.
+- Disposable QEMU regression test for installed-root boot and the explicit
+  `pythonos.debug=1` recovery path.
 - Hosted GUI offscreen smoke test and reproducible desktop screenshot.
 - Internal PythonOS app registry and terminal commands `apps`, `open` and
   `run` for opening managed desktop windows from inside PythonOS.

@@ -1,10 +1,14 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from pythonos import installer as installer_module
 from pythonos.installer import (
     InstallerError,
     _parse_os_release,
+    _write_fstab,
+    _write_grub_config,
     detect_operating_systems,
     format_bytes,
     guide_text,
@@ -52,6 +56,40 @@ class InstallerUtilityTests(unittest.TestCase):
         systems = [{"kind": "Linux", "path": "/dev/vda2", "description": "Ubuntu"}]
         with self.assertRaisesRegex(InstallerError, "detected operating system"):
             validate_dualboot_target("/dev/vda2", systems, disks=disks)
+
+    def test_guide_documents_installed_recovery_shell(self):
+        guide = guide_text()
+        self.assertIn("small storage-only initramfs", guide)
+        self.assertIn("pythonos.debug=1", guide)
+        self.assertIn("initramfs emergency shell", guide)
+
+    def test_grub_uses_disk_root_and_small_initramfs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(installer_module, "_uuid", return_value="root-uuid"):
+                _write_grub_config(
+                    root,
+                    "/dev/vda2",
+                    "/dev/vda1",
+                    boot_mode="uefi",
+                    root_fstype="ext4",
+                )
+            config = (root / "boot/grub/grub.cfg").read_text(encoding="utf-8")
+        self.assertIn("root=UUID=root-uuid rootfstype=ext4 rootwait", config)
+        self.assertIn("initrd /boot/initramfs-installed", config)
+        self.assertIn("pythonos.debug=1", config)
+        self.assertNotIn("initrd /boot/initramfs-lts", config)
+
+    def test_installed_fstab_mounts_runtime_tmpfs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(installer_module, "_uuid", side_effect=("root-uuid", "esp-uuid")):
+                _write_fstab(root, "/dev/vda2", "/dev/vda1", "ext4")
+            fstab = (root / "etc/fstab").read_text(encoding="utf-8")
+        self.assertIn("UUID=root-uuid / ext4", fstab)
+        self.assertIn("UUID=esp-uuid /boot/efi", fstab)
+        self.assertIn("tmpfs /run", fstab)
+        self.assertIn("tmpfs /tmp", fstab)
 
 
 if __name__ == "__main__":
